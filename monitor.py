@@ -88,19 +88,30 @@ HTML_TPL = """<!DOCTYPE html>
 
 # ==================== 加载缓存 ====================
 def load_cache():
+    """修复：确保始终返回字典类型"""
     try:
         if os.path.exists(CACHE_FILE):
             with open(CACHE_FILE, 'rb') as f:
-                return pickle.load(f)
-    except:
-        return {}
+                cache_data = pickle.load(f)
+                # 校验缓存数据是否为字典
+                if isinstance(cache_data, dict):
+                    return cache_data
+    except Exception as e:
+        # 打印异常信息便于调试（可选）
+        print(f"加载缓存失败: {e}")
+    # 任何异常/非法数据都返回空字典
+    return {}
 
 def save_cache(data):
+    """优化：仅保存字典类型数据"""
+    if not isinstance(data, dict):
+        print("缓存数据不是字典，跳过保存")
+        return
     try:
         with open(CACHE_FILE, 'wb') as f:
             pickle.dump(data, f)
-    except:
-        pass
+    except Exception as e:
+        print(f"保存缓存失败: {e}")
 
 # ==================== 安全请求函数 ====================
 def safe_request(url, headers=None, timeout=10):
@@ -108,42 +119,52 @@ def safe_request(url, headers=None, timeout=10):
         headers = {}
     headers['User-Agent'] = random.choice(USER_AGENT_POOL)
     try:
-        return requests.get(url, headers=headers, timeout=10)
-    except:
+        return requests.get(url, headers=headers, timeout=timeout)
+    except Exception as e:
+        print(f"请求失败 {url}: {e}")
         return None
 
 # ==================== 【回滚】获取净值（使用你要的原接口，不换） ====================
 def get_latest_official_nav(fund_code):
     cache = load_cache()
     now_ts = time.time()
-    if fund_code in cache:
-        if now_ts - cache[fund_code]['ts'] < CACHE_DURATION_SECONDS:
-            return cache[fund_code]['nav']
     
+    # 检查缓存是否有效
+    if fund_code in cache:
+        cache_item = cache[fund_code]
+        # 校验缓存项结构
+        if isinstance(cache_item, dict) and 'ts' in cache_item and 'nav' in cache_item:
+            if now_ts - cache_item['ts'] < CACHE_DURATION_SECONDS:
+                return cache_item['nav']
+    
+    # 接口请求
     api_url = f"http://fundgz.1234567.com.cn/js/{fund_code}.js"
     res = safe_request(api_url)
     if not res:
-        if fund_code in cache:
-            return cache[fund_code]['nav']
-        return None
+        # 缓存中有数据则返回，否则返回None
+        return cache.get(fund_code, {}).get('nav') if fund_code in cache else None
     
     try:
         text = res.text
         match = re.search(r'jsonpgz\((.*?)\);', text)
         if not match:
-            return None
-        data = __import__('json').loads(match.group(1))
+            return cache.get(fund_code, {}).get('nav') if fund_code in cache else None
+        
+        import json
+        data = json.loads(match.group(1))
         nav_str = data.get('dwjz')
         if not nav_str:
-            return None
+            return cache.get(fund_code, {}).get('nav') if fund_code in cache else None
+        
         nav = float(nav_str)
+        # 更新缓存
         cache[fund_code] = {'nav': nav, 'ts': now_ts}
         save_cache(cache)
         return nav
-    except:
-        if fund_code in cache:
-            return cache[fund_code]['nav']
-        return None
+    except Exception as e:
+        print(f"解析净值失败 {fund_code}: {e}")
+        # 异常时返回缓存数据（如果有）
+        return cache.get(fund_code, {}).get('nav') if fund_code in cache else None
 
 # ==================== 【回滚】获取场内价格（原接口） ====================
 def get_cn_fund_market_price(code):
@@ -161,7 +182,8 @@ def get_cn_fund_market_price(code):
         parts = text.split('~')
         price = float(parts[3]) if len(parts) > 3 and parts[3] else None
         return price if price and price > 0 else None
-    except:
+    except Exception as e:
+        print(f"解析场内价格失败 {code}: {e}")
         return None
 
 # ==================== 【回滚】美股涨跌幅（原接口） ====================
@@ -178,7 +200,8 @@ def get_us_ticker_change(ticker):
         if not latest or not prev or prev == 0:
             return 0.0
         return (latest / prev) - 1
-    except:
+    except Exception as e:
+        print(f"解析美股涨跌幅失败 {ticker}: {e}")
         return 0.0
 
 # ==================== 格式化 ====================
