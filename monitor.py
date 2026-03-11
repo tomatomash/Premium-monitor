@@ -1,76 +1,79 @@
 import os
 import requests
-import pandas as pd
-from datetime import datetime
+from datetime import datetime, time
+import pytz
 
-# ================= 配置区 =================
-# 映射关系：国内代码 -> 雅虎财经对应的海外标的（这样最准）
-# 162411 (华宝油气) 跟踪的是 XOP (标普石油天然气开采指数)
-# 161129 (标普生物) 跟踪的是 XBI
-# 160216 (原油LOF) 跟踪的是 USO
-TICKER_MAP = {
-    "162411": {"ticker": "XOP", "name": "华宝油气"},
-    "161129": {"ticker": "XBI", "name": "标普生物"},
-    "160216": {"ticker": "USO", "name": "原油LOF"}
+# ==================== 自动化配置数据库 ====================
+# 格式: "国内代码": ["海外标的Ticker", "英文简称"]
+FUND_MAP = {
+    "162411": ["XOP", "OilGas"], 
+    "161129": ["XBI", "BioTech"],
+    "160216": ["USO", "CrudeOil"],
 }
 
-THRESHOLD = 0.01  # 预警阈值 1%
-KEYWORD = "预警"
-# ==========================================
+# 粘贴你刚创建好的【表单分享链接】
+FORM_URL = "https://my.feishu.cn/share/base/form/shrcnaa8FdSQQvGYSKTeEhzXAlb"
+WEBHOOK_URL = os.getenv('FEISHU_URL')
+THRESHOLD = 0.02 
+# =======================================================
 
-def get_china_price(code):
-    """从新浪获取国内场内实时价格（这个接口通常只给价格，不给净值）"""
+def get_last_nav(code):
+    """自动获取该基金最新的官方净值数据"""
     try:
-        url = f"http://hq.sinajs.cn/list=sz{code}"
-        res = requests.get(url, headers={'Referer': 'http://finance.sina.com.cn'})
-        data = res.text.split(',')
-        return float(data[3]) # 现价
+        url = f"https://fundgz.1234567.com.cn/js/{code}.js"
+        res = requests.get(url)
+        # 解析返回的 jsonp 数据
+        import json
+        content = res.text.split('(')[1].split(')')[0]
+        data = json.loads(content)
+        return float(data['dwjz']) # 返回单位净值
     except:
         return None
 
-def get_yahoo_iopv(ticker):
-    """从雅虎财经获取海外底层标的的实时涨跌幅，用于推算实时净值"""
-    try:
-        # 使用雅虎财经免鉴权接口
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers)
-        data = res.json()
-        
-        # 获取现价和昨收价
-        meta = data['chart']['result'][0]['meta']
-        current_price = meta['regularMarketPrice']
-        prev_close = meta['previousClose']
-        
-        # 返回实时涨跌幅
-        return current_price / prev_close
-    except Exception as e:
-        print(f"雅虎抓取 {ticker} 失败: {e}")
-        return None
-
-def run_monitor():
-    webhook_url = os.getenv('FEISHU_URL')
-    print(f"🚀 海外链路监控启动... {datetime.now()}")
-
-    for code, info in TICKER_MAP.items():
-        price = get_china_price(code)
-        # 这里我们需要一个基准：假设国内净值随海外标的同比例波动
-        # 这是一个简化模型，但在极端溢价套利中非常有效
-        change = get_yahoo_iopv(info['ticker'])
-        
-        if price and change:
-            # 这里的计算逻辑是：对比场内价格与海外底层波动的背离度
-            # 这种方法绕过了国内平台不给“参考净值”的问题
-            print(f"✅ {info['name']}: 场内 {price} | 海外标的波动 {change:.2%}")
+def run_task():
+    tz = pytz.timezone('Asia/Shanghai')
+    now = datetime.now(tz)
+    
+    for code, info in FUND_MAP.items():
+        ticker, name = info[0], info[1]
+        try:
+            # 1. 自动抓取昨日官方净值
+            last_nav = get_last_nav(code)
+            if not last_nav: continue
             
-            # 如果你想更准，可以手动填入一个今晨公布的官方净值基数
-            # 但即便不填，观察这个背离度也能发现套利机会
-            if abs(change - 1) > THRESHOLD: # 示例判断逻辑
-                 send_msg(webhook_url, info['name'], code, price, change)
+            # 2. 获取实时行情
+            res_p = requests.get(f"http://hq.sinajs.cn/list=sz{code}", headers={'Referer': 'http://finance.sina.com.cn'})
+            price = float(res_p.text.split(',')[3])
+            
+            res_y = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}", headers={'User-Agent': 'Mozilla/5.0'})
+            meta = res_y.json()['chart']['result'][0]['meta']
+            change = meta['regularMarketPrice'] / meta['previousClose']
+            
+            # 3. 计算
+            est_nav = last_nav * change
+            arb_gap = (price - est_nav) / est_nav
+            
+            # 4. 自动填表 (向表单提交数据)
+            form_api = FORM_URL.replace("/share/base/form/", "/share/base/query/form/api/submit/")
+            payload = {
+                "field_value_list": [
+                    {"field_id": "Clock", "value": now.timestamp() * 1000},
+                    {"field_id": "Code", "value": code},
+                    {"field_id": "Market", "value": price},
+                    {"field_id": "Value", "value": round(est_nav, 4)},
+                    {"field_id": "Gap", "value": arb_gap}
+                ]
+            }
+            requests.post(form_api, json=payload)
+            print(f"[{name}] 数据已录入表格")
 
-def send_msg(url, name, code, price, change):
-    message = f"🚨 {KEYWORD}\n基金：{name} ({code})\n场内价格：{price}\n海外底层波动：{change:.2%}\n注意：当前数据源来自 Yahoo Finance。"
-    requests.post(url, json={"msg_type":"text","content":{"text":message}})
+            # 5. 下午收盘前一小时 + 溢价 > 2% 触发飞书通知
+            if arb_gap > THRESHOLD and time(14, 0) <= now.time() <= time(15, 5):
+                alert_msg = f"🚨 GAP ALERT\nS: {code}\nA: {arb_gap:.2%}\nCheck Alpha_Log Now."
+                requests.post(WEBHOOK_URL, json={"msg_type":"text","content":{"text":alert_msg}})
+                
+        except Exception as e:
+            print(f"Error: {e}")
 
 if __name__ == "__main__":
-    run_monitor()
+    run_task()
