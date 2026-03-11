@@ -40,15 +40,15 @@ MAX_RETRY = 3  # 单次请求最大重试次数
 RETRY_WAIT_MIN = 1  # 重试前最小等待秒数
 RETRY_WAIT_MAX = 3  # 重试前最大等待秒数
 # 单标的处理后休眠（核心防频控）
-REQUEST_SLEEP_MIN = 2  # 每个标的处理完最少休眠秒数
-REQUEST_SLEEP_MAX = 4  # 每个标的处理完最多休眠秒数
+REQUEST_SLEEP_MIN = 1.5  # 每个标的处理完最少休眠秒数
+REQUEST_SLEEP_MAX = 3  # 每个标的处理完最多休眠秒数
 
 # 时区配置（核心解决日期对齐问题）
 CN_TZ = pytz.timezone('Asia/Shanghai')
 US_EAST_TZ = pytz.timezone('America/New_York')  # 美股交易时区
 UTC_TZ = pytz.UTC
 
-# 单次运行内的缓存（解决同ticker重复请求问题，单次运行内有效）
+# 单次运行内的缓存（解决同ticker/同基金重复请求问题，单次运行内有效）
 RUNTIME_CACHE = {
     "us_ticker_data": {},  # 美股ticker数据缓存，同ticker只请求一次
     "fund_nav_data": {}    # 基金净值数据缓存
@@ -160,58 +160,76 @@ def get_cn_fund_market_info(fund_code):
 
 def get_fund_official_nav(fund_code):
     """
-    【核心优化】获取基金【最新官方净值+净值日期】，和她理财同源，解决T-1/T-2错位问题
+    【彻底重构 海外IP兼容】双数据源兜底获取基金【最新官方净值+净值日期】
+    主数据源：新浪财经接口（海外IP完美兼容，无地域封禁）
+    备用数据源：天天基金接口（国内环境兜底）
     返回格式: {"nav": 1.234, "nav_date": "2026-03-10"} 失败返回None
     """
     # 先查运行时缓存
     if fund_code in RUNTIME_CACHE['fund_nav_data']:
         return RUNTIME_CACHE['fund_nav_data'][fund_code]
     
-    # 主接口：天天基金网核心净值接口，稳定获取官方净值和日期
-    url = f"https://fund.eastmoney.com/pingzhongdata/{fund_code}.js"
+    # ==================== 主数据源：新浪财经接口（海外IP首选）====================
+    print(f"[{fund_code}] 尝试主数据源：新浪财经")
+    sina_url = f"http://hq.sinajs.cn/list=f_{fund_code}"
+    res = request_with_retry(sina_url)
+    if res:
+        try:
+            text = res.text.strip()
+            # 匹配返回内容，格式：var hq_str_f_162411="华宝标普油气上游股票人民币A,0.5420,0.5420,2026-03-10,1.12%,0.0061";
+            match = re.search(r'"(.*?)"', text)
+            if match:
+                content = match.group(1)
+                parts = content.split(',')
+                if len(parts) >= 4:
+                    official_nav = float(parts[1])
+                    nav_date_str = parts[3]
+                    # 校验数据有效性
+                    if official_nav > 0 and nav_date_str:
+                        result = {
+                            "nav": official_nav,
+                            "nav_date": nav_date_str
+                        }
+                        RUNTIME_CACHE['fund_nav_data'][fund_code] = result
+                        print(f"[{fund_code}] 新浪财经获取成功：净值{official_nav} | 日期{nav_date_str}")
+                        return result
+        except Exception as e:
+            print(f"[{fund_code}] 新浪财经接口解析失败: {str(e)}")
+    
+    # ==================== 备用数据源：天天基金接口（兜底）====================
+    print(f"[{fund_code}] 主数据源失败，尝试备用数据源：天天基金")
+    eastmoney_url = f"https://fund.eastmoney.com/pingzhongdata/{fund_code}.js"
     headers = {
         "Referer": f"https://fund.eastmoney.com/{fund_code}.html",
         "Host": "fund.eastmoney.com"
     }
+    res = request_with_retry(eastmoney_url, headers=headers)
+    if res:
+        try:
+            text = res.text
+            nav_match = re.search(r'var DWJZ="([\d.]+)";', text)
+            date_match = re.search(r'var JZRQ="([\d\-]+)";', text)
+            if nav_match and date_match:
+                official_nav = float(nav_match.group(1))
+                nav_date_str = date_match.group(1)
+                if official_nav > 0 and nav_date_str:
+                    result = {
+                        "nav": official_nav,
+                        "nav_date": nav_date_str
+                    }
+                    RUNTIME_CACHE['fund_nav_data'][fund_code] = result
+                    print(f"[{fund_code}] 天天基金获取成功：净值{official_nav} | 日期{nav_date_str}")
+                    return result
+        except Exception as e:
+            print(f"[{fund_code}] 天天基金接口解析失败: {str(e)}")
     
-    res = request_with_retry(url, headers=headers)
-    if not res:
-        return None
-    
-    try:
-        text = res.text
-        # 匹配单位净值和净值日期
-        nav_match = re.search(r'var DWJZ="([\d.]+)";', text)
-        date_match = re.search(r'var JZRQ="([\d\-]+)";', text)
-        
-        if not nav_match or not date_match:
-            print(f"{fund_code} 未匹配到净值/净值日期")
-            return None
-        
-        official_nav = float(nav_match.group(1))
-        nav_date_str = date_match.group(1)
-        
-        # 校验数据有效性
-        if official_nav <= 0 or not nav_date_str:
-            print(f"{fund_code} 净值数据无效")
-            return None
-        
-        # 存入运行时缓存
-        result = {
-            "nav": official_nav,
-            "nav_date": nav_date_str
-        }
-        RUNTIME_CACHE['fund_nav_data'][fund_code] = result
-        print(f"获取{fund_code}官方净值成功: {official_nav} | 净值日期: {nav_date_str}")
-        return result
-    
-    except Exception as e:
-        print(f"解析{fund_code}净值数据失败: {str(e)}")
-        return None
+    # 所有数据源都失败
+    print(f"[{fund_code}] 所有数据源均获取净值失败")
+    return None
 
 def get_us_ticker_cumulative_change(ticker, nav_date_str):
     """
-    【彻底重构】计算对标美股从净值日期到现在的累计涨跌幅，解决日期错位、盘前数据缺失问题
+    【精准计算】计算对标美股从净值日期到现在的累计涨跌幅
     1. 优先取盘前/盘后最新价格，白天A股时段也能拿到实时变动
     2. 按净值日期对齐基准收盘价，解决T-1/T-2净值滞后问题
     3. 同ticker单次运行只请求一次，减少频控
@@ -241,17 +259,14 @@ def get_us_ticker_cumulative_change(ticker, nav_date_str):
         quote_data = chart_result['indicators']['quote'][0]
         
         # ==================== 步骤1：获取最新价格（优先盘前>盘后>常规收盘价）====================
-        # 优先级：盘前价格 > 盘后价格 > 常规市场收盘价
         latest_price = None
-        # 先看有没有盘前价格
+        # 优先级：盘前价格 > 盘后价格 > 常规市场收盘价
         if 'preMarketPrice' in meta and meta['preMarketPrice']:
             latest_price = meta['preMarketPrice']
             print(f"{ticker} 取盘前价格: {latest_price}")
-        # 再看有没有盘后价格
         elif 'postMarketPrice' in meta and meta['postMarketPrice']:
             latest_price = meta['postMarketPrice']
             print(f"{ticker} 取盘后价格: {latest_price}")
-        # 最后取常规收盘价
         else:
             latest_price = meta.get('regularMarketPrice')
             print(f"{ticker} 取常规收盘价: {latest_price}")
@@ -264,7 +279,6 @@ def get_us_ticker_cumulative_change(ticker, nav_date_str):
         # 把净值日期（北京时间字符串）转换成美东时间的日期，匹配美股交易日
         nav_date_cn = datetime.strptime(nav_date_str, "%Y-%m-%d").replace(tzinfo=CN_TZ)
         # 净值日期对应的美股交易日：QDII基金T日净值，对应的是T日美股收盘（北京时间T+1凌晨）
-        # 比如净值日期2026-03-10，对应的是美股3月10日的收盘价
         nav_date_us = nav_date_cn.astimezone(US_EAST_TZ).date()
         
         # 遍历5天的K线，找到对应日期的收盘价
