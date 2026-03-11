@@ -6,7 +6,7 @@ import time
 
 # ==================== 监控配置中心 ====================
 # base_nav: 请根据最新官方公告手动更新。这些数值决定了计算的精准度。
-# 数据参考日期：2026-03-11 (示例值)
+# 数据参考日期：2026-03-11
 FUND_CONFIG = {
     "162411": {"name": "华宝油气", "ticker": "XOP",  "base_nav": 0.5420},
     "160216": {"name": "原油LOF", "ticker": "USO",  "base_nav": 0.8950},
@@ -23,18 +23,16 @@ FUND_CONFIG = {
 }
 
 def get_us_change(ticker):
-    """获取美股标的实时涨跌幅 (带重试逻辑)"""
+    """获取美股标的实时涨跌幅"""
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    for _ in range(3):
-        try:
-            res = requests.get(url, headers=headers, timeout=10)
-            if res.status_code == 200:
-                m = res.json()['chart']['result'][0]['meta']
-                return (m.get('regularMarketPrice') / m.get('previousClose')) - 1
-            time.sleep(1)
-        except:
-            continue
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            m = res.json()['chart']['result'][0]['meta']
+            return (m.get('regularMarketPrice') / m.get('previousClose')) - 1
+    except:
+        pass
     return 0.0
 
 def get_cn_price(code):
@@ -43,13 +41,12 @@ def get_cn_price(code):
     url = f"http://qt.gtimg.cn/q={prefix}{code}"
     try:
         res = requests.get(url, timeout=5)
-        # 解析腾讯接口返回的字符串
         return float(res.text.split('~')[3])
     except:
         return None
 
 def generate_html(items_html, update_time):
-    """生成极简专业风格的网页"""
+    """生成网页"""
     html_template = f"""
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -58,20 +55,18 @@ def generate_html(items_html, update_time):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Alpha 实时套利监控</title>
         <style>
-            body {{ font-family: -apple-system, system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; }}
+            body {{ font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; }}
             .container {{ max-width: 500px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }}
             .header {{ background: #1890ff; color: white; padding: 20px; text-align: center; }}
             .title {{ font-size: 20px; font-weight: 600; margin: 0; }}
             .time {{ font-size: 12px; opacity: 0.8; margin-top: 8px; }}
             .row {{ display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }}
-            .row:last-child {{ border-bottom: none; }}
             .name-box {{ display: flex; flex-direction: column; gap: 4px; }}
             .name {{ font-weight: 500; color: #1f1f1f; font-size: 16px; }}
             .code {{ font-size: 12px; color: #8c8c8c; }}
-            .premium {{ font-family: "SF Mono", "Roboto Mono", monospace; font-weight: 700; font-size: 18px; }}
+            .premium {{ font-family: monospace; font-weight: 700; font-size: 18px; }}
             .plus {{ color: #cf1322; }}
             .minus {{ color: #389e0d; }}
-            .status-fail {{ font-size: 12px; color: #bfbfbf; }}
         </style>
         <meta http-equiv="refresh" content="60">
     </head>
@@ -79,6 +74,22 @@ def generate_html(items_html, update_time):
         <div class="container">
             <div class="header">
                 <p class="title">📊 Alpha 实时溢价监控</p>
-                <div class="time">最后更新: {update_time} (北京时间)</div>
+                <div class="time">最后更新: {update_time}</div>
             </div>
-            {items_html if items_html else
+            {items_html}
+        </div>
+    </body>
+    </html>
+    """
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(html_template)
+
+def run_task():
+    tz = pytz.timezone('Asia/Shanghai')
+    now_str = datetime.now(tz).strftime('%H:%M:%S')
+    
+    html_rows = []
+
+    for code, info in FUND_CONFIG.items():
+        cn_price = get_cn_price(code)
+        us_change = get_us_change(
