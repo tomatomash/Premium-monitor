@@ -2,6 +2,7 @@ import os
 import requests
 from datetime import datetime
 import pytz
+import time
 
 # ==================== 监控配置中心 ====================
 FUND_CONFIG = {
@@ -15,17 +16,31 @@ FUND_CONFIG = {
     "513500": ["IVV",  "标普500ETF"],
     "161127": ["QQQ",  "纳指100"],
     "513100": ["QQQ",  "纳指ETF"],
-    # --- 预留位：只要左边代码是 00000x，新逻辑会瞬间将其抹除 ---
-    #"000001": ["SPY",  "预留01"],
-    #"000010": ["ASML", "预留10"], 
-    # 格式：国内基金代码 | 海外对标代码 | 自定义名称
-    # 比如想看道指，把 000002 改成对应 LOF 代码
 }
 
 WEBHOOK_URL = os.getenv('FEISHU_URL')
 
+def get_price_data(ticker):
+    """尝试从雅虎财经获取数据，增加重试机制"""
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    for _ in range(3): # 最多重试3次
+        try:
+            response = requests.get(url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                result = response.json()['chart']['result'][0]['meta']
+                current = result.get('regularMarketPrice')
+                previous = result.get('previousClose')
+                if current and previous:
+                    return (current / previous) - 1
+            time.sleep(2)
+        except Exception as e:
+            print(f"请求 {ticker} 报错: {e}")
+    return None
+
 def generate_html(data_list, update_time):
-    """生成极简风格的仪表盘网页"""
     html_template = f"""
     <!DOCTYPE html>
     <html>
@@ -34,21 +49,21 @@ def generate_html(data_list, update_time):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Alpha 溢价看板</title>
         <style>
-            body {{ font-family: sans-serif; background: #f4f7f9; color: #333; display: flex; justify-content: center; padding: 20px; }}
-            .card {{ background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }}
-            h2 {{ border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 18px; color: #007aff; }}
-            .time {{ font-size: 12px; color: #888; margin-bottom: 15px; }}
-            .item {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f9f9f9; }}
-            .name {{ font-weight: 500; }}
-            .change {{ font-family: monospace; font-weight: bold; }}
-            .plus {{ color: #d20f39; }} .minus {{ color: #008000; }}
+            body {{ font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }}
+            .card {{ background: white; padding: 24px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); width: 100%; max-width: 400px; }}
+            h2 {{ color: #1a1a1a; display: flex; align-items: center; gap: 8px; margin-top: 0; }}
+            .time {{ font-size: 13px; color: #8c8c8c; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 12px; }}
+            .item {{ display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f5f5f5; }}
+            .plus {{ color: #cf1322; font-weight: bold; }}
+            .minus {{ color: #389e0d; font-weight: bold; }}
+            .fail {{ color: #bfbfbf; }}
         </style>
-        <meta http-equiv="refresh" content="60"> </head>
+    </head>
     <body>
         <div class="card">
-            <h2>📊 Alpha 实时监控看板</h2>
-            <div class="time">最后更新日期: {update_time}</div>
-            {"".join(data_list)}
+            <h2>📈 Alpha 实时监控</h2>
+            <div class="time">最后更新: {update_time} (北京时间)</div>
+            {data_list if data_list else '<div class="fail">暂无数据，请检查接口连通性</div>'}
         </div>
     </body>
     </html>
@@ -58,36 +73,28 @@ def generate_html(data_list, update_time):
 
 def run_task():
     sh_tz = pytz.timezone('Asia/Shanghai')
-    now = datetime.now(sh_tz)
-    now_str = now.strftime('%H:%M:%S')
+    now_str = datetime.now(sh_tz).strftime('%H:%M:%S')
     
     feishu_report = [f"通知：Alpha 溢价监控 ({now_str})", "---"]
     html_items = []
     
-    for code, info in FUND_CONFIG.items():
-        ticker, name = info
-        try:
-            res_y = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}", timeout=10)
-            meta = res_y.json()['chart']['result'][0]['meta']
-            ovs_change = (meta['regularMarketPrice'] / meta['previousClose']) - 1
-            
-            # 格式化数据
-            change_str = f"{ovs_change:+.2%}"
-            color_class = "plus" if ovs_change >= 0 else "minus"
-            
-            # 存入飞书列表
-            feishu_report.append(f"• {name} ({code}): {change_str}")
-            # 存入HTML列表
-            html_items.append(f'<div class="item"><span class="name">{name}</span><span class="change {color_class}">{change_str}</span></div>')
-        except:
+    for code, (ticker, name) in FUND_CONFIG.items():
+        change = get_price_data(ticker)
+        if change is not None:
+            sign = "+" if change >= 0 else ""
+            color = "plus" if change >= 0 else "minus"
+            text = f"{sign}{change:.2%}"
+            feishu_report.append(f"• {name} ({code}): {text}")
+            html_items.append(f'<div class="item"><span>{name}</span><span class="{color}">{text}</span></div>')
+        else:
             feishu_report.append(f"• {name} ({code}): 获取失败")
+            print(f"无法获取 {name} 的数据")
 
-    # 1. 发送飞书
+    # 发送消息与生成页面
     if WEBHOOK_URL:
-        requests.post(WEBHOOK_URL, json={"msg_type": "text", "content": {"text": "\n".join(feishu_report)}})
+        requests.post(WEBHOOK_URL, json={{"msg_type": "text", "content": {{"text": "\n".join(feishu_report)}}}})
     
-    # 2. 生成本地 HTML 文件
-    generate_html(html_items, now_str)
+    generate_html("".join(html_items), now_str)
 
 if __name__ == "__main__":
     run_task()
