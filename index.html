@@ -1,26 +1,29 @@
-
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Alpha 溢价看板</title>
-        <style>
-            body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
-            .card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); width: 100%; max-width: 400px; }
-            h2 { color: #1a1a1a; display: flex; align-items: center; gap: 8px; margin-top: 0; }
-            .time { font-size: 13px; color: #8c8c8c; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 12px; }
-            .item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f5f5f5; }
-            .plus { color: #cf1322; font-weight: bold; }
-            .minus { color: #389e0d; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h2>📈 Alpha 实时监控</h2>
-            <div class="time">最后更新: 19:28:05</div>
-            <div class="item"><span>华宝油气</span><span class="minus">-1.74%</span></div><div class="item"><span>原油LOF</span><span class="plus">+1.47%</span></div><div class="item"><span>纳指科技</span><span class="plus">+1.16%</span></div><div class="item"><span>全球芯片</span><span class="plus">+0.73%</span></div><div class="item"><span>生物科技</span><span class="plus">+0.24%</span></div><div class="item"><span>中概互联</span><span class="plus">+1.47%</span></div><div class="item"><span>标普500</span><span class="minus">-0.18%</span></div><div class="item"><span>标普500ETF</span><span class="minus">-0.18%</span></div><div class="item"><span>纳指100</span><span class="plus">+0.00%</span></div><div class="item"><span>纳指ETF</span><span class="plus">+0.00%</span></div>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha 实时套利监控</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; }
+        .container { max-width: 500px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }
+        .header { background: #1890ff; color: white; padding: 20px; text-align: center; }
+        .row { display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }
+        .name { font-weight: 500; font-size: 16px; color: #1f1f1f; }
+        .code { font-size: 12px; color: #8c8c8c; margin-top: 2px; }
+        .premium { font-family: monospace; font-weight: 700; font-size: 18px; }
+        .plus { color: #cf1322; }
+        .minus { color: #389e0d; }
+    </style>
+    <meta http-equiv="refresh" content="60">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 20px; font-weight: bold;">📊 Alpha 实时溢价监控</div>
+            <div style="font-size: 12px; margin-top: 8px;">更新时间: 20:10:05</div>
         </div>
-    </body>
-    </html>
-    
+        <div class="row"><div><div class="name">华宝油气</div><div class="code">代码: 162411</div></div><div class="premium plus">+61.30%</div></div><div class="row"><div><div class="name">原油LOF</div><div class="code">代码: 160216</div></div><div class="premium minus">-13.34%</div></div><div class="row"><div><div class="name">南方原油</div><div class="code">代码: 160416</div></div><div class="premium plus">+96.06%</div></div><div class="row"><div><div class="name">纳指科技</div><div class="code">代码: 159509</div></div><div class="premium plus">+42.01%</div></div><div class="row"><div><div class="name">全球芯片</div><div class="code">代码: 501225</div></div><div class="premium plus">+11.47%</div></div><div class="row"><div><div class="name">标普科技</div><div class="code">代码: 161128</div></div><div class="premium plus">+353.24%</div></div><div class="row"><div><div class="name">生物科技</div><div class="code">代码: 161129</div></div><div class="premium plus">+40.32%</div></div><div class="row"><div><div class="name">中概互联</div><div class="code">代码: 164906</div></div><div class="premium plus">+10.35%</div></div><div class="row"><div><div class="name">标普500</div><div class="code">代码: 161125</div></div><div class="premium plus">+30.38%</div></div><div class="row"><div><div class="name">标普500ETF</div><div class="code">代码: 513500</div></div><div class="premium plus">+4.42%</div></div><div class="row"><div><div class="name">纳指100</div><div class="code">代码: 161127</div></div><div class="premium minus">-6.31%</div></div><div class="row"><div><div class="name">纳指ETF</div><div class="code">代码: 513100</div></div><div class="premium minus">-3.35%</div></div>
+    </div>
+</body>
+</html>
