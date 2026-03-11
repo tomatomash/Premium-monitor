@@ -32,3 +32,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./
           publish_files: index.html  # 只发布这一个文件，覆盖旧的
+# 删掉 destination_dir: monitor 这一行
+          keep_files: true        # 确保不删掉你其他的 HTML 项目
