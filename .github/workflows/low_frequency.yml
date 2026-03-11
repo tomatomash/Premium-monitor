@@ -17,3 +17,15 @@ jobs:
         run: |
           pip install requests pytz
           python monitor.py
+# ...前面的步骤不变...
+      - name: 执行监控并生成网页
+        env:
+          FEISHU_URL: ${{ secrets.FEISHU_URL }}
+        run: python monitor.py
+
+      - name: 将网页部署到 GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
+          publish_files: index.html  # 只发布这一个文件，覆盖旧的
