@@ -14,29 +14,36 @@ import pickle
 # cn_ticker: 国内对标指数/ETF代码 (这里以芯片ETF 159995 为例代表中证芯片产业)
 # cn_weight: 国内资产占比
 # usd_exposure: 美元汇率敞口比例 (通常与美股权重一致)
+# ==================== 【全量精算版】17个标的完整配置 ====================
 FUND_CONFIG = {
-    "501225": {
-        "name": "全球芯片LOF", 
-        "us_ticker": "SOXX", "us_weight": 0.75,
-        "cn_ticker": "sz159995", "cn_weight": 0.15, # 使用对应国内ETF或指数作为国内涨跌幅代理
-        "usd_exposure": 0.75
-    },
-    "161128": {
-        "name": "标普科技LOF", 
-        "us_ticker": "XLK", "us_weight": 0.95,
-        "cn_ticker": None, "cn_weight": 0.0,
-        "usd_exposure": 0.95
-    },
-    "162411": {
-        "name": "华宝油气LOF", 
-        "us_ticker": "XOP", "us_weight": 0.95,
-        "usd_exposure": 0.95
-    },
-    "161125": {
-        "name": "标普500LOF", 
-        "us_ticker": "ES=F", "us_weight": 0.95, # 使用期指捕捉盘中波动
-        "usd_exposure": 0.95
-    }
+    # --- 原油及商品类 (主力对标 CL=F 原油期货) ---
+    "160216": {"name": "国泰原油LOF", "us_ticker": "CL=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "160416": {"name": "南方原油LOF", "us_ticker": "CL=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "161129": {"name": "易方达原油LOF", "us_ticker": "CL=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "501018": {"name": "南方原油LOF(C)", "us_ticker": "CL=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "160723": {"name": "嘉实原油LOF", "us_ticker": "CL=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "162719": {"name": "广发石油LOF", "us_ticker": "XOP", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "162411": {"name": "华宝油气LOF", "us_ticker": "XOP", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+
+    # --- 黄金类 (对标 GC=F 黄金期货) ---
+    "161116": {"name": "易方达黄金主题", "us_ticker": "GC=F", "us_weight": 0.50, "cn_ticker": "sh600547", "cn_weight": 0.45, "usd_exposure": 0.50}, # 黄金主题含金矿股，国内权重较高
+    "160719": {"name": "嘉实黄金LOF", "us_ticker": "GC=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "161226": {"name": "国泰黄金LOF", "us_ticker": "GC=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "164701": {"name": "汇添富黄金LOF", "us_ticker": "GC=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+
+    # --- 科技及行业类 ---
+    "501225": {"name": "全球芯片LOF", "us_ticker": "SOXX", "us_weight": 0.75, "cn_ticker": "sz159995", "cn_weight": 0.15, "usd_exposure": 0.75},
+    "159509": {"name": "纳指科技ETF", "us_ticker": "NQ=F", "us_weight": 0.98, "cn_weight": 0.0, "usd_exposure": 0.98},
+    "161128": {"name": "标普科技LOF", "us_ticker": "XLK", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "162415": {"name": "生物科技LOF", "us_ticker": "XBI", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "164906": {"name": "中概互联LOF", "us_ticker": "KWEB", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.50},
+    "160644": {"name": "港美互联网LOF", "us_ticker": "KWEB", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.50},
+
+    # --- 宽基类 ---
+    "161125": {"name": "标普500LOF", "us_ticker": "ES=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "513500": {"name": "标普500ETF", "us_ticker": "ES=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "161127": {"name": "纳指100LOF", "us_ticker": "NQ=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
+    "513100": {"name": "纳指ETF", "us_ticker": "NQ=F", "us_weight": 0.95, "cn_weight": 0.0, "usd_exposure": 0.95},
 }
 
 # ==================== 基础配置与缓存 ====================
