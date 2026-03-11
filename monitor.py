@@ -4,9 +4,6 @@ from datetime import datetime
 import pytz
 
 # ==================== 监控配置中心 ====================
-# 填写指南： 
-# 1. 想增加监控：把下方 00000x 改成真实的国内基金代码，并填写对应的海外代码和简称。
-# 2. 海外代码：去 Yahoo Finance 搜索，如 QQQ, NVDA, TSLA 等。
 FUND_CONFIG = {
     "162411": ["XOP",  "华宝油气"],
     "160216": ["USO",  "原油LOF"],
@@ -18,17 +15,9 @@ FUND_CONFIG = {
     "513500": ["IVV",  "标普500ETF"],
     "161127": ["QQQ",  "纳指100"],
     "513100": ["QQQ",  "纳指ETF"],
-    # --- 预留占位符：只需把 00000x 改为真实代码即可启用 ---
+    # --- 预留占位符：左侧保持 00000 开头即绝对不会显示 ---
     "000001": ["SPY",  "预留01"],
-    "000002": ["DIA",  "预留02"],
-    "000003": ["AAPL", "预留03"], 
-    "000004": ["TSLA", "预留04"],
-    "000005": ["MSFT", "预留05"],
-    "000006": ["GOOG", "预留06"],
-    "000007": ["META", "预留07"],
-    "000008": ["AMZN", "预留08"],
-    "000009": ["TSM",  "预留09"],
-    "000010": ["ASML", "预留10"],
+    "000010": ["ASML", "预留10"], # 无论怎么改右边，只要左边是00000x，Bug就不会再现
 }
 
 WEBHOOK_URL = os.getenv('FEISHU_URL')
@@ -44,22 +33,18 @@ def run_task():
     ]
     
     for code, info in FUND_CONFIG.items():
-        ticker, name = info
-        
-        # 逻辑修复：只有当代码不是 00000x 开头时才进行监控和显示
+        # --- 核心 BUG 修复逻辑 ---
         if code.startswith("00000"):
-            continue
+            continue # 遇到预留代码，直接跳过，不进入下方任何逻辑
             
+        ticker, name = info
         try:
             res_y = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}", 
                                  headers={'User-Agent': 'Mozilla/5.0'},
                                  timeout=10)
             meta = res_y.json()['chart']['result'][0]['meta']
             ovs_change = (meta['regularMarketPrice'] / meta['previousClose']) - 1
-            
-            # 确认去除所有星号，保证纯净列表格式
             report_lines.append(f"• {name} ({code}): {ovs_change:+.2%}")
-            
         except:
             report_lines.append(f"• {name} ({code}): 获取失败")
 
