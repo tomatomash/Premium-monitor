@@ -15,9 +15,9 @@ FUND_CONFIG = {
     "513500": ["IVV",  "标普500ETF"],
     "161127": ["QQQ",  "纳指100"],
     "513100": ["QQQ",  "纳指ETF"],
-    # --- 预留占位符：左侧保持 00000 开头即绝对不会显示 ---
+    # --- 预留位：只要左边代码是 00000x，新逻辑会瞬间将其抹除 ---
     "000001": ["SPY",  "预留01"],
-    "000010": ["ASML", "预留10"], # 无论怎么改右边，只要左边是00000x，Bug就不会再现
+    "000010": ["ASML", "预留10"], 
 }
 
 WEBHOOK_URL = os.getenv('FEISHU_URL')
@@ -32,11 +32,11 @@ def run_task():
         "---"
     ]
     
-    for code, info in FUND_CONFIG.items():
-        # --- 核心 BUG 修复逻辑 ---
-        if code.startswith("00000"):
-            continue # 遇到预留代码，直接跳过，不进入下方任何逻辑
-            
+    # 【暴力修复】创建一个只包含真实代码的干净清单
+    # 只要代码以 "00000" 开头，它甚至连进入循环的机会都没有
+    clean_list = {k: v for k, v in FUND_CONFIG.items() if not k.startswith("00000")}
+    
+    for code, info in clean_list.items():
         ticker, name = info
         try:
             res_y = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}", 
