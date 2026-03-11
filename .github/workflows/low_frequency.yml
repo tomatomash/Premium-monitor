@@ -1,0 +1,19 @@
+name: 低频监控 (休市时段)
+on:
+  schedule:
+    # 每天其余时间，每小时运行一次
+    # 排除 1-6 点(UTC)，即排除 A股交易段
+    - cron: '0 0,7-23 * * *'
+  workflow_dispatch:
+
+jobs:
+  run_monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 执行监控
+        env:
+          FEISHU_URL: ${{ secrets.FEISHU_URL }}
+        run: |
+          pip install requests pytz
+          python monitor.py
