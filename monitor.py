@@ -123,3 +123,15 @@ def run_task():
 
 if __name__ == "__main__":
     run_task()
+# 修复后的飞书推送逻辑
+    if WEBHOOK_URL:
+        payload = {
+            "msg_type": "text",
+            "content": {
+                "text": "\n".join(feishu_lines)
+            }
+        }
+        try:
+            requests.post(WEBHOOK_URL, json=payload, timeout=10)
+        except Exception as e:
+            print(f"推送失败: {e}")
