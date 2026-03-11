@@ -23,38 +23,71 @@ FUND_CONFIG = {
 }
 
 WEBHOOK_URL = os.getenv('FEISHU_URL')
-# =====================================================
+
+def generate_html(data_list, update_time):
+    """生成极简风格的仪表盘网页"""
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Alpha 溢价看板</title>
+        <style>
+            body {{ font-family: sans-serif; background: #f4f7f9; color: #333; display: flex; justify-content: center; padding: 20px; }}
+            .card {{ background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }}
+            h2 {{ border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 18px; color: #007aff; }}
+            .time {{ font-size: 12px; color: #888; margin-bottom: 15px; }}
+            .item {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f9f9f9; }}
+            .name {{ font-weight: 500; }}
+            .change {{ font-family: monospace; font-weight: bold; }}
+            .plus {{ color: #d20f39; }} .minus {{ color: #008000; }}
+        </style>
+        <meta http-equiv="refresh" content="60"> </head>
+    <body>
+        <div class="card">
+            <h2>📊 Alpha 实时监控看板</h2>
+            <div class="time">最后更新日期: {update_time}</div>
+            {"".join(data_list)}
+        </div>
+    </body>
+    </html>
+    """
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(html_template)
 
 def run_task():
     sh_tz = pytz.timezone('Asia/Shanghai')
     now = datetime.now(sh_tz)
+    now_str = now.strftime('%H:%M:%S')
     
-    report_lines = [
-        f"通知：Alpha 溢价监控 ({now.strftime('%H:%M')})",
-        "---"
-    ]
+    feishu_report = [f"通知：Alpha 溢价监控 ({now_str})", "---"]
+    html_items = []
     
-    # 【暴力修复】创建一个只包含真实代码的干净清单
-    # 只要代码以 "00000" 开头，它甚至连进入循环的机会都没有
-    clean_list = {k: v for k, v in FUND_CONFIG.items() if not k.startswith("00000")}
-    
-    for code, info in clean_list.items():
+    for code, info in FUND_CONFIG.items():
         ticker, name = info
         try:
-            res_y = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}", 
-                                 headers={'User-Agent': 'Mozilla/5.0'},
-                                 timeout=10)
+            res_y = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}", timeout=10)
             meta = res_y.json()['chart']['result'][0]['meta']
             ovs_change = (meta['regularMarketPrice'] / meta['previousClose']) - 1
-            report_lines.append(f"• {name} ({code}): {ovs_change:+.2%}")
+            
+            # 格式化数据
+            change_str = f"{ovs_change:+.2%}"
+            color_class = "plus" if ovs_change >= 0 else "minus"
+            
+            # 存入飞书列表
+            feishu_report.append(f"• {name} ({code}): {change_str}")
+            # 存入HTML列表
+            html_items.append(f'<div class="item"><span class="name">{name}</span><span class="change {color_class}">{change_str}</span></div>')
         except:
-            report_lines.append(f"• {name} ({code}): 获取失败")
+            feishu_report.append(f"• {name} ({code}): 获取失败")
 
+    # 1. 发送飞书
     if WEBHOOK_URL:
-        requests.post(WEBHOOK_URL, json={
-            "msg_type": "text", 
-            "content": {"text": "\n".join(report_lines)}
-        })
+        requests.post(WEBHOOK_URL, json={"msg_type": "text", "content": {"text": "\n".join(feishu_report)}})
+    
+    # 2. 生成本地 HTML 文件
+    generate_html(html_items, now_str)
 
 if __name__ == "__main__":
     run_task()
