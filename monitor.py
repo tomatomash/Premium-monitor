@@ -36,7 +36,6 @@ def get_cn_price(code):
     url = f"http://qt.gtimg.cn/q={prefix}{code}"
     try:
         res = requests.get(url, timeout=5)
-        # 腾讯接口解析
         parts = res.text.split('~')
         if len(parts) > 3:
             return float(parts[3])
@@ -44,9 +43,28 @@ def get_cn_price(code):
         pass
     return None
 
-def generate_html(content, update_time):
-    # 使用三引号包裹HTML，确保没有任何引号冲突
-    html_template = f"""<!DOCTYPE html>
+def run_task():
+    tz = pytz.timezone('Asia/Shanghai')
+    now_str = datetime.now(tz).strftime('%H:%M:%S')
+    rows = []
+
+    for code, info in FUND_CONFIG.items():
+        cn_price = get_cn_price(code)
+        us_change = get_us_change(info['ticker'])
+        
+        if cn_price:
+            est_nav = info['base_nav'] * (1 + us_change)
+            premium = (cn_price / est_nav) - 1
+            color = "plus" if premium > 0 else "minus"
+            sign = "+" if premium > 0 else ""
+            p_text = f"{sign}{premium:.2%}"
+            
+            row_html = f'<div class="row"><div><div class="name">{info["name"]}</div><div class="code">代码: {code}</div></div><div class="premium {color}">{p_text}</div></div>'
+            rows.append(row_html)
+
+    content_html = "".join(rows) if rows else '<div style="padding:40px; text-align:center; color:#999;">等待数据更新...</div>'
+
+    final_html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -59,7 +77,7 @@ def generate_html(content, update_time):
         .row {{ display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }}
         .name {{ font-weight: 500; font-size: 16px; color: #1f1f1f; }}
         .code {{ font-size: 12px; color: #8c8c8c; margin-top: 2px; }}
-        .premium {{ font-family: "SF Mono", monospace; font-weight: 700; font-size: 18px; }}
+        .premium {{ font-family: monospace; font-weight: 700; font-size: 18px; }}
         .plus {{ color: #cf1322; }}
         .minus {{ color: #389e0d; }}
     </style>
@@ -68,14 +86,4 @@ def generate_html(content, update_time):
 <body>
     <div class="container">
         <div class="header">
-            <div style="font-size: 20px; font-weight: bold;">📊 Alpha 实时溢价监控</div>
-            <div style="font-size: 12px; margin-top: 8px;">更新时间: {update_time}</div>
-        </div>
-        {content}
-    </div>
-</body>
-</html>"""
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(html_template)
-
-def run_task
+            <div style="font-size: 20px;
