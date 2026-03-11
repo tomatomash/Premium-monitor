@@ -23,7 +23,7 @@ FUND_CONFIG = {
 
 def get_us_change(ticker):
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     try:
         res = requests.get(url, headers=headers, timeout=10)
         m = res.json()['chart']['result'][0]['meta']
@@ -36,32 +36,46 @@ def get_cn_price(code):
     url = f"http://qt.gtimg.cn/q={prefix}{code}"
     try:
         res = requests.get(url, timeout=5)
-        return float(res.text.split('~')[3])
+        # 腾讯接口解析
+        parts = res.text.split('~')
+        if len(parts) > 3:
+            return float(parts[3])
     except:
-        return None
+        pass
+    return None
 
 def generate_html(content, update_time):
-    html_template = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Alpha 实时套利监控</title>
-        <style>
-            body {{ font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; }}
-            .container {{ max-width: 500px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }}
-            .header {{ background: #1890ff; color: white; padding: 20px; text-align: center; }}
-            .row {{ display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }}
-            .name {{ font-weight: 500; font-size: 16px; }}
-            .code {{ font-size: 12px; color: #8c8c8c; }}
-            .premium {{ font-family: monospace; font-weight: 700; font-size: 18px; }}
-            .plus {{ color: #cf1322; }}
-            .minus {{ color: #389e0d; }}
-        </style>
-        <meta http-equiv="refresh" content="60">
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div style="font-size: 20px; font-weight: bold;">📊 Alpha
+    # 使用三引号包裹HTML，确保没有任何引号冲突
+    html_template = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha 实时套利监控</title>
+    <style>
+        body {{ font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; }}
+        .container {{ max-width: 500px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }}
+        .header {{ background: #1890ff; color: white; padding: 20px; text-align: center; }}
+        .row {{ display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }}
+        .name {{ font-weight: 500; font-size: 16px; color: #1f1f1f; }}
+        .code {{ font-size: 12px; color: #8c8c8c; margin-top: 2px; }}
+        .premium {{ font-family: "SF Mono", monospace; font-weight: 700; font-size: 18px; }}
+        .plus {{ color: #cf1322; }}
+        .minus {{ color: #389e0d; }}
+    </style>
+    <meta http-equiv="refresh" content="60">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 20px; font-weight: bold;">📊 Alpha 实时溢价监控</div>
+            <div style="font-size: 12px; margin-top: 8px;">更新时间: {update_time}</div>
+        </div>
+        {content}
+    </div>
+</body>
+</html>"""
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(html_template)
+
+def run_task
