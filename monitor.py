@@ -1,11 +1,14 @@
 import akshare as ak
 import os
 import requests
+import pandas as pd
 from datetime import datetime
 
-MONITOR_LIST = ["162411", "161129"] 
-THRESHOLD = 0.015 
+# ================= 配置区 =================
+MONITOR_LIST = ["162411", "161129"] # 华宝油气, 标普生物
+THRESHOLD = 0.01                # 调低到1%进行测试，确保能收到消息
 KEYWORD = "预警" 
+# ==========================================
 
 def run_monitor():
     webhook_url = os.getenv('FEISHU_URL')
@@ -13,46 +16,59 @@ def run_monitor():
         print("❌ 错误：未设置 FEISHU_URL")
         return
 
+    print(f"🚀 开始执行离线监控... 当前时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
     try:
-        # 尝试获取数据
+        # 使用 ak.fund_lof_spot_em() 的备选逻辑，显式指定字段
+        # 如果这个接口在海外依然缺字段，代码会报错并进入 except 捕获
         df = ak.fund_lof_spot_em()
         
-        # 自动识别“参考净值”所在的列（兼容不同平台的叫法）
-        # 有些叫 '参考净值', 有些叫 'IOPV', 有些叫 '实时估值'
-        possible_cols = ['参考净值', 'IOPV', '实时估值', '净值']
-        val_col = next((c for c in possible_cols if c in df.columns), None)
-        
-        if not val_col:
-            print(f"❌ 错误：找不到净值列。当前可选列有: {list(df.columns)}")
-            return
-
+        # 如果 df 中没有“参考净值”，我们手动通过另一个接口补齐
         for code in MONITOR_LIST:
             fund_row = df[df['代码'] == code]
-            if fund_row.empty:
-                print(f"未找到代码: {code}")
-                continue
+            if fund_row.empty: continue
             
             fund = fund_row.iloc[0]
             name = fund['名称']
             price = float(fund['最新价'])
-            iopv = float(fund[val_col]) # 使用自动识别的列名
             
-            if iopv == 0 or iopv is None:
-                print(f"⚠️ {name} 净值为0，跳过计算")
-                continue
-                
-            premium = (price - iopv) / iopv
-            print(f"检查: {name} | 溢价率: {premium:.2%}")
+            # 【关键优化】：如果东财没净值，尝试从新浪单独抓取该代码的实时 IOPV
+            iopv = 0
+            if '参考净值' in fund and fund['参考净值'] and float(fund['参考净值']) > 0:
+                iopv = float(fund['参考净值'])
+            else:
+                # 备用方案：直接调用新浪的单个基金实时接口（含IOPV）
+                try:
+                    # 模拟新浪的单个查询请求
+                    url = f"http://hq.sinajs.cn/list=sz{code}"
+                    res = requests.get(url, headers={'Referer': 'http://finance.sina.com.cn'})
+                    data = res.text.split(',')
+                    # 新浪 SZ 类型接口：第 31 位通常是 IOPV
+                    if len(data) > 31:
+                        iopv = float(data[31])
+                except:
+                    print(f"⚠️ {name} 备用接口也失效")
 
-            # 发送逻辑（即便没达标，你也可以先改成 > -1 来测试飞书是否通畅）
-            if premium > THRESHOLD:
-                send_msg(webhook_url, name, code, premium, price, iopv)
+            if iopv > 0:
+                premium = (price - iopv) / iopv
+                print(f"📊 {name}: 现价 {price} | 净值 {iopv} | 溢价 {premium:.2%}")
                 
+                if premium > THRESHOLD:
+                    send_msg(webhook_url, name, code, premium, price, iopv)
+            else:
+                print(f"❌ {name} 无法获取有效净值数据")
+
     except Exception as e:
-        print(f"监控运行异常: {str(e)}")
+        print(f"🔥 监控运行异常: {str(e)}")
 
 def send_msg(url, name, code, premium, price, iopv):
-    message = f"🚨 {KEYWORD}\n基金：{name} ({code})\n溢价率：{premium:.2%}\n现价：{price}\n参考值：{iopv}"
+    message = (
+        f"🚨 {KEYWORD}\n"
+        f"基金：{name} ({code})\n"
+        f"实时溢价：{premium:.2%}\n"
+        f"现价：{price} | 净值：{iopv}\n"
+        f"推送时间：{datetime.now().strftime('%H:%M:%S')}"
+    )
     payload = {"msg_type": "text", "content": {"text": message}}
     requests.post(url, json=payload)
 
