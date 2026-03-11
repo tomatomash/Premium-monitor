@@ -1,0 +1,22 @@
+name: 高频监控 (A股交易时段)
+on:
+  schedule:
+    # 北京时间 09:00 - 15:00，每 15 分钟运行一次 (对应 UTC 01:00 - 07:00)
+    - cron: '*/15 1-6 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run_monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 准备 Python 环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: 安装依赖
+        run: pip install requests pytz
+      - name: 执行监控
+        env:
+          FEISHU_URL: ${{ secrets.FEISHU_URL }}
+        run: python monitor.py
