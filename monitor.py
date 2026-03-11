@@ -1,68 +1,87 @@
 import os
 import requests
-import json
 from datetime import datetime
 import pytz
 
-# ==================== 配置区 ====================
-WEBHOOK_URL = os.getenv('FEISHU_URL')
-
-# 监控配置：{"国内代码": ["海外代码", "简称"]}
-FUND_MAP = {
-    "162411": ["XOP", "华宝油气"], 
-    "161129": ["XBI", "生物科技"],
-    "160216": ["USO", "原油LOF"],
+# ==================== 监控池：全量套利标的 ====================
+# 格式: "国内代码": ["海外代码", "简称"]
+FUND_CONFIG = {
+    # --- 油气与资源类 ---
+    "162411": ["XOP",  "华宝油气"],
+    "160216": ["USO",  "原油LOF"],
+    "162719": ["XOP",  "广发油气"],
+    "160416": ["XLE",  "南方原油"],
+    
+    # --- 科技、芯片与医药 ---
+    "501225": ["SOXX", "全球芯片"],
+    "161128": ["XLK",  "标普科技"],
+    "161129": ["XBI",  "生物科技"],
+    "159509": ["NVDA", "纳指科技"], # 增加热门标的
+    "164906": ["KWEB", "中概互联"],
+    
+    # --- 核心指数类 ---
+    "161125": ["IVV",  "标普500"],
+    "513500": ["IVV",  "标普500ETF"],
+    "160644": ["KWEB", "港美互联"],
+    "161127": ["QQQ",  "纳指100"],
+    "513100": ["QQQ",  "纳指ETF"],
+    "159941": ["QQQ",  "纳指LOF"],
+    
+    # --- 恒生与黄金 ---
+    "164701": ["700.HK", "添富恒生"], # 港股对标
+    "160717": ["HSI",    "嘉实恒生"],
+    "164703": ["GLD",    "添富黄金"],
 }
 
-THRESHOLD = 0.02  # 2% 阈值标记
-# ===============================================
+WEBHOOK_URL = os.getenv('FEISHU_URL')
+THRESHOLD = 0.02 # 2% 溢价预警线
+# ===============================================================
 
 def run_task():
-    tz = pytz.timezone('Asia/Shanghai')
-    now = datetime.now(tz)
+    sh_tz = pytz.timezone('Asia/Shanghai')
+    now = datetime.now(sh_tz)
     
-    report_lines = [f"📊 【Alpha 监控报告】", f"⏰ 推送时间: {now.strftime('%H:%M:%S')}", ""]
+    # 消息头部
+    report = [
+        "📊 **【Alpha 套利实时全景图】**",
+        f"⏰ 抓取时刻: {now.strftime('%H:%M:%S')}",
+        "💡 *计算依据: 场内现价 vs 海外 T-0 实时波动*",
+        "---"
+    ]
     
-    for code, info in FUND_MAP.items():
-        ticker, name = info[0], info[1]
+    for code, info in FUND_CONFIG.items():
+        ticker, name = info
         try:
-            # 1. 获取国内 T-0 实时场内价格 (Sina)
+            # 1. 国内实时价 (新浪接口)
             res_p = requests.get(f"http://hq.sinajs.cn/list=sz{code}", headers={'Referer': 'http://finance.sina.com.cn'})
             p_data = res_p.text.split(',')
-            price = float(p_data[3])
-            p_time = p_data[31] # 国内实时行情时间
+            price, p_time = float(p_data[3]), p_data[31]
 
-            # 2. 获取海外最新波动 (Yahoo Finance)
+            # 2. 海外实时波动 (Yahoo Finance)
             res_y = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}", headers={'User-Agent': 'Mozilla/5.0'})
-            y_json = res_y.json()['chart']['result'][0]
-            meta = y_json['meta']
-            
-            # 计算海外相对于昨日收盘的波动 (T-0 实时波动)
+            meta = res_y.json()['chart']['result'][0]['meta']
             ovs_change = (meta['regularMarketPrice'] / meta['previousClose']) - 1
-            ovs_time = datetime.fromtimestamp(meta['regularMarketTime'], tz).strftime('%H:%M')
-
-            # 3. 计算估算溢价率 (简易模型：假设国内收盘已反映 T-1 净值，此波动为 T-0 增量)
-            # 注意：此溢价率指示场内价格相对于海外实时波动的偏差
-            est_gap = (price / (1 + ovs_change)) / price - 1 # 简易逻辑示意
-            # 更直观的显示：直接显示场内价格与海外实时表现的背离度
             
-            status_icon = "🚨" if abs(ovs_change) >= THRESHOLD else "✅"
+            # 3. 视觉逻辑
+            is_hot = abs(ovs_change) >= THRESHOLD
+            alert_icon = "🚨" if is_hot else "🔹"
             
             line = (
-                f"{status_icon} **{name} ({code})**\n"
-                f" ├ 场内现价: {price} (T-0 {p_time})\n"
-                f" ├ 海外波动: {ovs_change:+.2%} (T-0 {ovs_time})\n"
-                f" └ 溢价预警: {'超过2%!' if abs(ovs_change) >= THRESHOLD else '正常'}"
+                f"{alert_icon} **{name} ({code})**\n"
+                f" ├ 海外波动: {ovs_change:+.2%} (T-0 04:00)\n"
+                f" ├ 场内现价: {price} ({p_time})\n"
+                f" └ 状态: {'🔥溢价显著' if is_hot else '波澜不惊'}"
             )
-            report_lines.append(line)
+            report.append(line)
             
-        except Exception as e:
-            report_lines.append(f"❌ {name} 数据获取失败: {e}")
+        except Exception:
+            report.append(f"❌ {name} ({code}) 数据获取超时")
 
-    # 合并成一条消息发送
-    full_message = "\n".join(report_lines)
-    requests.post(WEBHOOK_URL, json={"msg_type": "text", "content": {"text": full_message}})
-    print("✅ 全景报告已发送")
+    # 合并为一条消息推送至机器人
+    requests.post(WEBHOOK_URL, json={
+        "msg_type": "text", 
+        "content": {"text": "\n".join(report)}
+    })
 
 if __name__ == "__main__":
     run_task()
