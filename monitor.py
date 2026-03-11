@@ -7,6 +7,7 @@ import pytz
 import time
 import pickle
 
+
 # ==================== 【核心配置】支持复合权重与汇率对冲 ====================
 # 配置说明：
 # us_ticker: 美股对标代码
@@ -166,6 +167,17 @@ def run_monitor_task():
         est_nav = nav * (1 + est_daily_return)
         p2 = (mp - est_nav) / est_nav if est_nav else p1
 
+
+        # 在 HTML 模板里的 <head> 部分加上这一行，强制浏览器每分钟重新抓取
+HTML_TPL = """
+<head>
+    ...
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta http-equiv="refresh" content="60">
+</head>
+"""
         # ==================== 渲染 HTML ====================
         t1, c1 = format_premium(p1)
         t2, c2 = format_premium(p2)
