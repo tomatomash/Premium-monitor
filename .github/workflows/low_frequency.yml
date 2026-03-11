@@ -36,7 +36,7 @@ jobs:
           publish_files: index.html
           keep_files: true
 # 在你的 workflow 步骤中添加以下部分
-    - name: Run script
+      - name: Run script
       run: |
         rm -f fund_cache.pkl  # 强制删除缓存文件，确保获取最新实时数据
         python monitor.py
