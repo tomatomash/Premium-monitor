@@ -1,0 +1,29 @@
+name: LOF_Monitor_Automation
+
+on:
+  schedule:
+    # 这里的 cron 表达式代表北京时间周一至周五的交易时段
+    # 每 15 分钟运行一次。注意：GitHub Actions 有 5-10 分钟左右的随机延迟
+    - cron: '*/15 1-7 * * 1-5'
+  workflow_dispatch: # 这是一个“手动开关”，允许你随时手动点一下运行测试
+
+jobs:
+  run_monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. 拉取代码
+        uses: actions/checkout@v3
+
+      - name: 2. 准备 Python 环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 3. 安装依赖库
+        run: pip install akshare requests
+
+      - name: 4. 执行监控脚本
+        env:
+          # 从你之前设置的“保险箱”里读取飞书地址
+          FEISHU_URL: ${{ secrets.FEISHU_URL }}
+        run: python monitor.py
