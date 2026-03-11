@@ -6,6 +6,7 @@ from datetime import datetime
 import pytz
 import time
 import pickle
+import json
 
 # ==================== 【核心配置】严格对应：代码-名称 ====================
 FUND_CONFIG = {
@@ -18,7 +19,7 @@ FUND_CONFIG = {
     "160723": {"name": "嘉实原油LOF"},
     "162719": {"name": "广发石油LOF"},
     
-    # ==================== 黄金类 ====================
+    # ==================== 黄金类 (新加入) ====================
     "161116": {"name": "易方达黄金主题"},
     "160719": {"name": "嘉实黄金LOF"},
     "161226": {"name": "国泰黄金LOF"},
@@ -41,29 +42,15 @@ FUND_CONFIG = {
 
 # ==================== 缓存配置 ====================
 CACHE_FILE = "fund_cache.pkl"
+COOKIE_CACHE_FILE = "xueqiu_cookie.pkl"
 CACHE_DURATION_SECONDS = 2 * 3600  # 2小时缓存
 CN_TZ = pytz.timezone('Asia/Shanghai')
 
-# ==================== 雪球API访问频率控制配置 ====================
-MIN_REQUEST_INTERVAL = 2  # 最小2秒
-MAX_REQUEST_INTERVAL = 5  # 最大5秒
-
-# ==================== 雪球API请求配置 (新增核心配置) ====================
-XUEQIU_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Referer': 'https://xueqiu.com/',
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"Windows"',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-origin',
-    'X-Requested-With': 'XMLHttpRequest',
-    'Connection': 'keep-alive'
-}
+# ==================== 随机UA池 ====================
+USER_AGENT_POOL = [
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
+]
 
 # ==================== HTML模板 ====================
 HTML_TPL = """<!DOCTYPE html>
@@ -83,6 +70,7 @@ HTML_TPL = """<!DOCTYPE html>
         .plus {{ color: #cf1322; }}
         .minus {{ color: #389e0d; }}
         .neutral {{ color: #595959; }}
+        .source {{ font-size: 10px; color: #8c8c8c; margin-top: 2px; }}
     </style>
     <meta http-equiv="refresh" content="60">
 </head>
@@ -91,7 +79,7 @@ HTML_TPL = """<!DOCTYPE html>
         <div class="header">
             <div style="font-size: 20px; font-weight: bold;">📊 Alpha 全自动监控</div>
             <div style="font-size: 12px; margin-top: 8px;">更新时间: {now_str}</div>
-            <div style="font-size: 10px; margin-top: 4px; opacity: 0.9;">数据来源：雪球API (精准溢价率) | 访问间隔：{interval_range}秒</div>
+            <div style="font-size: 10px; margin-top: 4px; opacity: 0.9;">数据来源：雪球API，实时溢价率</div>
         </div>
         {content_html}
     </div>
@@ -105,10 +93,13 @@ def load_cache():
         if os.path.exists(CACHE_FILE):
             with open(CACHE_FILE, 'rb') as f:
                 cache_data = pickle.load(f)
+                # 校验缓存数据是否为字典
                 if isinstance(cache_data, dict):
                     return cache_data
     except Exception as e:
+        # 打印异常信息便于调试（可选）
         print(f"加载缓存失败: {e}")
+    # 任何异常/非法数据都返回空字典
     return {}
 
 def save_cache(data):
@@ -122,167 +113,197 @@ def save_cache(data):
     except Exception as e:
         print(f"保存缓存失败: {e}")
 
-# ==================== 创建雪球Session (核心修复) ====================
-def create_xueqiu_session():
-    """创建并初始化雪球Session，复用Cookie和请求头"""
-    session = requests.Session()
-    
-    # 设置持久化请求头
-    session.headers.update(XUEQIU_HEADERS)
-    
-    # 添加随机延迟，模拟真人访问
-    time.sleep(random.uniform(1, 2))
-    
+def load_xueqiu_cookie():
+    """加载雪球Cookie缓存"""
     try:
-        # 先访问雪球主页初始化Session
-        response = session.get('https://xueqiu.com/', timeout=15)
-        if response.status_code == 200:
-            print("✅ 雪球Session初始化成功")
-            return session
-        else:
-            print(f"❌ 雪球Session初始化失败，状态码: {response.status_code}")
-            return None
+        if os.path.exists(COOKIE_CACHE_FILE):
+            with open(COOKIE_CACHE_FILE, 'rb') as f:
+                cookie_data = pickle.load(f)
+                if isinstance(cookie_data, dict) and 'cookie' in cookie_data:
+                    return cookie_data.get('cookie')
     except Exception as e:
-        print(f"❌ 创建雪球Session异常: {e}")
+        print(f"加载雪球Cookie失败: {e}")
+    return None
+
+def save_xueqiu_cookie(cookie):
+    """保存雪球Cookie到缓存"""
+    try:
+        with open(COOKIE_CACHE_FILE, 'wb') as f:
+            pickle.dump({'cookie': cookie, 'timestamp': time.time()}, f)
+    except Exception as e:
+        print(f"保存雪球Cookie失败: {e}")
+
+# ==================== 安全请求函数 ====================
+def safe_request(url, headers=None, timeout=10, cookies=None):
+    if headers is None:
+        headers = {}
+    headers['User-Agent'] = random.choice(USER_AGENT_POOL)
+    try:
+        return requests.get(url, headers=headers, timeout=timeout, cookies=cookies)
+    except Exception as e:
+        print(f"请求失败 {url}: {e}")
         return None
 
-# ==================== 获取雪球精准溢价率 (核心修复) ====================
-def get_xueqiu_premium_rate(fund_code, session):
-    """
-    从雪球API获取精准的溢价率（复用Session）
-    :param fund_code: 基金代码
-    :param session: 复用的雪球Session
-    :return: 溢价率（小数形式），如0.02表示2%
-    """
-    if not session:
-        print(f"❌ {fund_code} - 雪球Session为空，无法请求")
-        return None
-    
-    cache = load_cache()
-    now_ts = time.time()
-    
-    # 检查缓存是否有效
-    cache_key = f"xueqiu_{fund_code}"
-    if cache_key in cache:
-        cache_item = cache[cache_key]
-        if isinstance(cache_item, dict) and 'ts' in cache_item and 'premium' in cache_item:
-            if now_ts - cache_item['ts'] < CACHE_DURATION_SECONDS:
-                print(f"[缓存命中] {fund_code} - 使用缓存的溢价率数据: {cache_item['premium']:.2%}")
-                return cache_item['premium']
-    
-    # 确定市场前缀 SH/SZ
-    if fund_code.startswith(('5', '6', '9')):
-        market_prefix = "SH"
-    else:
-        market_prefix = "SZ"
-    
-    # 雪球行情接口
-    api_url = f"https://stock.xueqiu.com/v5/stock/quote.json?symbol={market_prefix}{fund_code}"
+# ==================== 获取雪球Cookie ====================
+def get_xueqiu_cookie():
+    """获取雪球Cookie"""
+    cached_cookie = load_xueqiu_cookie()
+    if cached_cookie:
+        # 检查缓存是否过期（假设24小时过期）
+        try:
+            with open(COOKIE_CACHE_FILE, 'rb') as f:
+                cookie_data = pickle.load(f)
+                if time.time() - cookie_data.get('timestamp', 0) < 24 * 3600:
+                    return cached_cookie
+        except:
+            pass
+
+    # 获取新的Cookie
+    headers = {
+        'User-Agent': random.choice(USER_AGENT_POOL),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    }
     
     try:
-        # 发送API请求（复用Session）
-        response = session.get(api_url, timeout=15)
-        
-        # 检查响应状态
+        response = requests.get('https://xueqiu.com/', headers=headers, allow_redirects=True)
+        cookie = response.cookies
+        save_xueqiu_cookie(cookie)
+        return cookie
+    except Exception as e:
+        print(f"获取雪球Cookie失败: {e}")
+        return None
+
+# ==================== 获取雪球溢价率 ====================
+def get_xueqiu_premium_rate(fund_code):
+    """从雪球API获取溢价率"""
+    cookie = get_xueqiu_cookie()
+    if not cookie:
+        print(f"无法获取雪球Cookie，跳过 {fund_code}")
+        return None
+
+    # 判断基金代码前缀，确定交易所在雪球的符号
+    if fund_code.startswith(('5', '6', '9')):
+        symbol = f"SH{fund_code}"  # 上交所
+    else:
+        symbol = f"SZ{fund_code}"  # 深交所
+
+    url = f"https://stock.xueqiu.com/v5/stock/quote.json?symbol={symbol}&extend=detail"
+    
+    headers = {
+        'User-Agent': random.choice(USER_AGENT_POOL),
+        'Accept': 'application/json',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'Referer': 'https://xueqiu.com/',
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, cookies=cookie, timeout=10)
         if response.status_code != 200:
-            print(f"❌ {fund_code} - API请求失败，状态码: {response.status_code}")
-            return cache.get(cache_key, {}).get('premium') if cache_key in cache else None
-        
-        # 解析响应数据
+            print(f"雪球API请求失败，状态码: {response.status_code}, {fund_code}")
+            return None
+            
         data = response.json()
         
-        # 检查数据结构
         if 'data' not in data or 'quote' not in data['data']:
-            print(f"❌ {fund_code} - 雪球返回数据结构异常: {data}")
-            return cache.get(cache_key, {}).get('premium') if cache_key in cache else None
+            print(f"雪球API响应格式错误，{fund_code}")
+            return None
+            
+        quote = data['data']['quote']
         
-        # 提取溢价率（雪球返回的是百分比数值，如2.5表示2.5%）
-        premium_rate = data['data']['quote'].get('premium_rate', 0.0)
-        # 转换为小数形式（如2.5% → 0.025）
-        premium = premium_rate / 100.0
+        # 尝试获取溢价率
+        if 'premium_rate' in quote:
+            premium_rate = quote['premium_rate']
+            if premium_rate is not None:
+                return float(premium_rate)
         
-        # 更新缓存
-        cache[cache_key] = {'premium': premium, 'ts': now_ts}
-        save_cache(cache)
-        
-        print(f"[API成功] {fund_code} - 溢价率: {premium:.2%}")
-        return premium
-        
-    except requests.exceptions.Timeout:
-        print(f"❌ {fund_code} - API请求超时")
-        return cache.get(cache_key, {}).get('premium') if cache_key in cache else None
-    except requests.exceptions.ConnectionError:
-        print(f"❌ {fund_code} - API连接错误")
-        return cache.get(cache_key, {}).get('premium') if cache_key in cache else None
+        # 如果没有直接的溢价率，尝试通过其他字段计算
+        if 'current' in quote and 'net_value' in quote:
+            current_price = quote.get('current')
+            net_value = quote.get('net_value')
+            
+            if current_price and net_value and net_value > 0:
+                calculated_premium = (current_price - net_value) / net_value
+                return calculated_premium
+                
     except Exception as e:
-        print(f"❌ {fund_code} - 解析溢价率异常: {e}")
-        return cache.get(cache_key, {}).get('premium') if cache_key in cache else None
+        print(f"解析雪球溢价率失败 {fund_code}: {e}")
+        return None
+    
+    return None
+
+# ==================== 【回滚】获取场内价格（原接口） ====================
+def get_cn_fund_market_price(code):
+    prefix = "sh" if code.startswith(('5', '6', '9')) else "sz"
+    full_code = f"{prefix}{code}"
+    url = f"http://qt.gtimg.cn/q={full_code}"
+    res = safe_request(url, timeout=8)
+    if not res:
+        return None
+    try:
+        res.encoding = 'gbk'
+        text = res.text
+        if '~' not in text:
+            return None
+        parts = text.split('~')
+        price = float(parts[3]) if len(parts) > 3 and parts[3] else None
+        return price if price and price > 0 else None
+    except Exception as e:
+        print(f"解析场内价格失败 {code}: {e}")
+        return None
 
 # ==================== 格式化 ====================
 def format_premium(premium):
     if premium is None:
-        return "数据获取失败", "neutral"
-    
+        return "N/A", "neutral"
     sign = "+" if premium > 0 else ""
     color = "plus" if premium > 0 else "minus" if premium < 0 else "neutral"
     return f"{sign}{premium:.2%}", color
 
-# ==================== 主函数 (核心修复) ====================
+# ==================== 主函数 ====================
 def run_monitor_task():
     now = datetime.now(CN_TZ)
     now_str = now.strftime('%Y-%m-%d %H:%M:%S')
     rows = []
-    
-    # 初始化雪球Session（全局复用）
-    print("\n📡 正在初始化雪球Session...")
-    xueqiu_session = create_xueqiu_session()
-    
-    # 遍历所有标的，每个标的请求后添加随机时间间隔
-    total_funds = len(FUND_CONFIG)
-    current_index = 0
-    
+
     for code, info in FUND_CONFIG.items():
-        current_index += 1
         name = info['name']
+
+        # 从雪球获取溢价率
+        premium_rate = get_xueqiu_premium_rate(code)
         
-        print(f"\n===== 处理第 {current_index}/{total_funds} 个标的: {code} {name} =====")
-        
-        # 获取雪球精准溢价率（复用Session）
-        premium = get_xueqiu_premium_rate(code, xueqiu_session)
-        display, color = format_premium(premium)
+        # 同时获取场内价格用于显示（备用）
+        market_price = get_cn_fund_market_price(code)
+
+        if premium_rate is None:
+            rows.append(f'''
+            <div class="row">
+                <div>
+                    <div class="name">{name}</div>
+                    <div class="code">代码: {code}</div>
+                </div>
+                <div class="premium neutral">无数据</div>
+            </div>''')
+            continue
+
+        display_text, color = format_premium(premium_rate)
 
         rows.append(f'''
         <div class="row">
             <div>
                 <div class="name">{name}</div>
                 <div class="code">代码: {code}</div>
+                <div class="source">雪球API</div>
             </div>
-            <div class="premium {color}">{display}</div>
+            <div class="premium {color}">{display_text}</div>
         </div>''')
-        
-        # 为每个标的请求后添加随机时间间隔（最后一个标的不添加）
-        if current_index < total_funds and xueqiu_session:
-            interval = random.uniform(MIN_REQUEST_INTERVAL, MAX_REQUEST_INTERVAL)
-            print(f"[频率控制] 等待 {interval:.1f} 秒后继续下一个标的...")
-            time.sleep(interval)
 
-    # 生成HTML
-    interval_range = f"{MIN_REQUEST_INTERVAL}-{MAX_REQUEST_INTERVAL}"
-    html = HTML_TPL.format(
-        now_str=now_str, 
-        content_html="".join(rows),
-        interval_range=interval_range
-    )
+    html = HTML_TPL.format(now_str=now_str, content_html="".join(rows))
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    
-    print(f"\n✅ 所有标的处理完成，HTML文件已更新 - {now_str}")
-    
-    # 关闭Session
-    if xueqiu_session:
-        xueqiu_session.close()
 
 if __name__ == "__main__":
-    print("🚀 启动LOF基金溢价率监控程序（带频率控制+Session复用）")
-    print(f"📋 配置：请求间隔 {MIN_REQUEST_INTERVAL}-{MAX_REQUEST_INTERVAL} 秒 | 缓存有效期 {CACHE_DURATION_SECONDS/3600} 小时")
     run_monitor_task()
