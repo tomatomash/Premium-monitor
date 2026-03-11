@@ -21,12 +21,12 @@ FUND_CONFIG = {
 WEBHOOK_URL = os.getenv('FEISHU_URL')
 
 def get_price_data(ticker):
-    """尝试从雅虎财经获取数据，增加重试机制"""
+    """尝试从雅虎财经获取数据"""
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-    for _ in range(3): # 最多重试3次
+    for _ in range(3):
         try:
             response = requests.get(url, headers=headers, timeout=15)
             if response.status_code == 200:
@@ -36,8 +36,8 @@ def get_price_data(ticker):
                 if current and previous:
                     return (current / previous) - 1
             time.sleep(2)
-        except Exception as e:
-            print(f"请求 {ticker} 报错: {e}")
+        except:
+            pass
     return None
 
 def generate_html(data_list, update_time):
@@ -56,14 +56,13 @@ def generate_html(data_list, update_time):
             .item {{ display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f5f5f5; }}
             .plus {{ color: #cf1322; font-weight: bold; }}
             .minus {{ color: #389e0d; font-weight: bold; }}
-            .fail {{ color: #bfbfbf; }}
         </style>
     </head>
     <body>
         <div class="card">
             <h2>📈 Alpha 实时监控</h2>
-            <div class="time">最后更新: {update_time} (北京时间)</div>
-            {data_list if data_list else '<div class="fail">暂无数据，请检查接口连通性</div>'}
+            <div class="time">最后更新: {update_time}</div>
+            {data_list if data_list else '<div>正在等待数据抓取...</div>'}
         </div>
     </body>
     </html>
@@ -88,11 +87,14 @@ def run_task():
             html_items.append(f'<div class="item"><span>{name}</span><span class="{color}">{text}</span></div>')
         else:
             feishu_report.append(f"• {name} ({code}): 获取失败")
-            print(f"无法获取 {name} 的数据")
 
-    # 发送消息与生成页面
+    # 修复后的飞书请求代码
     if WEBHOOK_URL:
-        requests.post(WEBHOOK_URL, json={{"msg_type": "text", "content": {{"text": "\n".join(feishu_report)}}}})
+        payload = {
+            "msg_type": "text",
+            "content": {"text": "\n".join(feishu_report)}
+        }
+        requests.post(WEBHOOK_URL, json=payload)
     
     generate_html("".join(html_items), now_str)
 
