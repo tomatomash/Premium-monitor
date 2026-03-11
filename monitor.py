@@ -2,9 +2,12 @@ import os
 import re
 import random
 import requests
+import json
 from datetime import datetime, timedelta
 import pytz
 import time
+import pickle
+import hashlib
 
 # ==================== 【核心配置区】仅需维护标的代码和对标ticker ====================
 MONITOR_TARGETS = [
@@ -26,35 +29,49 @@ MONITOR_TARGETS = [
     {"code": "513100", "ticker": "QQQ"},
 ]
 
-# ==================== 反爬与稳定性配置 ====================
-# 随机User-Agent池，避免被识别为机器人
-USER_AGENT_POOL = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-]
-# 请求重试配置
-MAX_RETRY = 3  # 单次请求最大重试次数
-RETRY_WAIT_MIN = 1  # 重试前最小等待秒数
-RETRY_WAIT_MAX = 3  # 重试前最大等待秒数
-# 单标的处理后休眠（核心防频控）
-REQUEST_SLEEP_MIN = 1.5  # 每个标的处理完最少休眠秒数
-REQUEST_SLEEP_MAX = 3  # 每个标的处理完最多休眠秒数
-
-# 时区配置（核心解决日期对齐问题）
+# ==================== 核心配置 ====================
+# 缓存配置（解决IP封禁时兜底）
+CACHE_FILE = "fund_cache.pkl"
+CACHE_EXPIRE_HOURS = 12  # 缓存12小时
+# 防频控配置
+GLOBAL_SLEEP = 3  # 全局请求间隔
+ITEM_SLEEP_MIN = 2
+ITEM_SLEEP_MAX = 5
+# 熔断配置（连续失败3个标的直接停止请求，避免浪费）
+FAIL_THRESHOLD = 3
+# 时区
 CN_TZ = pytz.timezone('Asia/Shanghai')
-US_EAST_TZ = pytz.timezone('America/New_York')  # 美股交易时区
+US_EAST_TZ = pytz.timezone('America/New_York')
 UTC_TZ = pytz.UTC
 
-# 单次运行内的缓存（解决同ticker/同基金重复请求问题，单次运行内有效）
-RUNTIME_CACHE = {
-    "us_ticker_data": {},  # 美股ticker数据缓存，同ticker只请求一次
-    "fund_nav_data": {}    # 基金净值数据缓存
-}
+# ==================== 请求头池（模拟真实浏览器） ====================
+HEADERS_POOL = [
+    {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Referer': 'https://www.jisilu.cn/',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'X-Requested-With': 'XMLHttpRequest'
+    },
+    {
+        'User-Agent': 'Mozilla/5.0 (Android 14; Mobile; rv:109.0) Gecko/115.0 Firefox/115.0',
+        'Referer': 'https://www.jisilu.cn/',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin'
+    },
+    {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0',
+        'Referer': 'https://www.jisilu.cn/data/qdii/qdii_list/',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6'
+    }
+]
 
-# ==================== HTML渲染模板 ====================
+# ==================== HTML模板 ====================
 HTML_TPL = """<!DOCTYPE html>
 <html>
 <head>
@@ -62,7 +79,7 @@ HTML_TPL = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LOF溢价精准监控</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #f5f7fa; margin: 0; padding: 12px; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; margin: 0; padding: 12px; }}
         .container {{ max-width: 680px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; }}
         .header {{ background: linear-gradient(135deg, #1890ff, #096dd9); color: white; padding: 18px; text-align: center; }}
         .header .title {{ font-size: 20px; font-weight: 700; }}
@@ -77,6 +94,7 @@ HTML_TPL = """<!DOCTYPE html>
         .minus {{ color: #389e0d; }}
         .neutral {{ color: #595959; }}
         .warn-tag {{ font-size: 11px; background: #fff2e8; color: #d46b08; padding: 2px 4px; border-radius: 3px; margin-left: 6px; }}
+        .cache-tag {{ font-size: 11px; background: #e8f4ff; color: #1890ff; padding: 2px 4px; border-radius: 3px; margin-left: 6px; }}
     </style>
     <meta http-equiv="refresh" content="60">
 </head>
@@ -84,7 +102,7 @@ HTML_TPL = """<!DOCTYPE html>
     <div class="container">
         <div class="header">
             <div class="title">📊 LOF溢价精准监控</div>
-            <div class="subinfo">更新时间: {now_str} | 格式：官方净值溢价~实时估算溢价 | 按溢价从高到低排序</div>
+            <div class="subinfo">更新时间: {now_str} | 格式：低溢价~高溢价 | 按溢价从高到低排序</div>
         </div>
         <div class="table-header">
             <span>基金标的</span>
@@ -95,365 +113,313 @@ HTML_TPL = """<!DOCTYPE html>
 </body>
 </html>"""
 
-# ==================== 核心工具函数 ====================
-def request_with_retry(url, headers=None, timeout=10, is_gbk=False):
-    """
-    带重试、随机UA的通用请求函数，核心解决反爬和请求失败问题
-    """
-    if headers is None:
-        headers = {}
-    
-    for retry_count in range(MAX_RETRY):
-        try:
-            # 每次请求随机换UA
-            headers['User-Agent'] = random.choice(USER_AGENT_POOL)
-            res = requests.get(url, headers=headers, timeout=timeout)
-            res.raise_for_status()  # 抛出HTTP状态码异常
-            if is_gbk:
-                res.encoding = 'gbk'
-            return res
-        except Exception as e:
-            print(f"请求失败（重试{retry_count+1}/{MAX_RETRY}）URL: {url} | 错误: {str(e)}")
-            if retry_count < MAX_RETRY - 1:
-                # 重试前随机等待
-                time.sleep(random.uniform(RETRY_WAIT_MIN, RETRY_WAIT_MAX))
-            continue
-    # 所有重试都失败
-    print(f"请求彻底失败 URL: {url}")
+# ==================== 缓存工具函数 ====================
+def load_cache():
+    """加载本地缓存"""
+    try:
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, 'rb') as f:
+                return pickle.load(f)
+    except:
+        pass
+    return {}
+
+def save_cache(cache_data):
+    """保存缓存到本地"""
+    try:
+        with open(CACHE_FILE, 'wb') as f:
+            pickle.dump(cache_data, f)
+    except:
+        print("缓存保存失败")
+
+def get_cached_fund_data(fund_code):
+    """获取缓存的基金数据，判断是否过期"""
+    cache = load_cache()
+    if fund_code in cache:
+        data = cache[fund_code]
+        cache_time = data.get('cache_time', 0)
+        # 检查是否过期
+        if time.time() - cache_time < CACHE_EXPIRE_HOURS * 3600:
+            return data
     return None
 
-def get_cn_fund_market_info(fund_code):
-    """
-    获取国内基金场内【标准简称+实时成交价】，带重试机制
-    """
-    prefix = "sh" if fund_code.startswith(('5', '6', '9')) else "sz"
-    full_code = f"{prefix}{fund_code}"
-    url = f"http://qt.gtimg.cn/q={full_code}"
+def set_cached_fund_data(fund_code, data):
+    """设置基金数据缓存"""
+    cache = load_cache()
+    data['cache_time'] = time.time()
+    cache[fund_code] = data
+    save_cache(cache)
+
+# ==================== 核心请求函数 ====================
+def get_random_headers():
+    """获取随机请求头"""
+    return random.choice(HEADERS_POOL)
+
+def safe_request(url, headers=None, timeout=15, retry=2):
+    """安全请求函数，带重试和延迟"""
+    if headers is None:
+        headers = get_random_headers()
     
-    res = request_with_retry(url, is_gbk=True)
-    if not res:
-        return {"name": fund_code, "price": None}
+    for i in range(retry + 1):
+        try:
+            time.sleep(GLOBAL_SLEEP)  # 全局请求间隔
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            return response
+        except Exception as e:
+            print(f"请求失败 (重试{i+1}/{retry+1}): {url} | 错误: {str(e)}")
+            if i < retry:
+                time.sleep(random.uniform(ITEM_SLEEP_MIN, ITEM_SLEEP_MAX))
+                continue
+            return None
+
+# ==================== 数据获取核心函数 ====================
+def get_jisilu_qdii_data():
+    """从集思录获取全量QDII/LOF数据（核心数据源）"""
+    url = "https://www.jisilu.cn/data/qdii/qdii_list/"
+    headers = get_random_headers()
+    response = safe_request(url, headers=headers)
+    
+    if not response:
+        return None
     
     try:
-        text = res.text.strip()
-        if not text or '~' not in text:
-            return {"name": fund_code, "price": None}
+        # 解析页面中的JSON数据
+        html = response.text
+        # 匹配核心数据
+        match = re.search(r'var g_qdii_data = (\[.*?\]);', html, re.S)
+        if not match:
+            return None
         
-        parts = text.split('~')
-        if len(parts) < 4:
-            return {"name": fund_code, "price": None}
-        
-        fund_name = parts[1].strip()
-        price_str = parts[3].strip()
-        market_price = float(price_str) if price_str else None
-        
-        if market_price and market_price <= 0:
-            market_price = None
-        
+        qdii_data = json.loads(match.group(1))
+        # 转换为字典，方便按代码查找
+        fund_dict = {}
+        for fund in qdii_data:
+            fund_code = fund.get('fund_code')
+            if fund_code:
+                fund_dict[fund_code] = fund
+        return fund_dict
+    except Exception as e:
+        print(f"解析集思录数据失败: {str(e)}")
+        return None
+
+def get_fund_detail_from_jisilu(fund_code, jisilu_data):
+    """从集思录数据中提取单只基金信息"""
+    if not jisilu_data or fund_code not in jisilu_data:
+        return None
+    
+    fund = jisilu_data[fund_code]
+    try:
+        # 核心数据提取
         return {
-            "name": fund_name,
-            "price": market_price
+            'name': fund.get('fund_nm', fund_code),
+            'nav': float(fund.get('fund_nav', 0)) if fund.get('fund_nav') else None,
+            'nav_date': fund.get('nav_dt', ''),
+            'market_price': float(fund.get('price', 0)) if fund.get('price') else None,
+            'premium_rate': float(fund.get('premium_rt', 0)) / 100 if fund.get('premium_rt') else None
         }
     except Exception as e:
-        print(f"解析{fund_code}场内行情失败: {str(e)}")
-        return {"name": fund_code, "price": None}
+        print(f"解析{fund_code}数据失败: {str(e)}")
+        return None
 
-def get_fund_official_nav(fund_code):
-    """
-    【彻底重构 海外IP兼容】双数据源兜底获取基金【最新官方净值+净值日期】
-    主数据源：新浪财经接口（海外IP完美兼容，无地域封禁）
-    备用数据源：天天基金接口（国内环境兜底）
-    返回格式: {"nav": 1.234, "nav_date": "2026-03-10"} 失败返回None
-    """
-    # 先查运行时缓存
-    if fund_code in RUNTIME_CACHE['fund_nav_data']:
-        return RUNTIME_CACHE['fund_nav_data'][fund_code]
+def get_us_ticker_change(ticker):
+    """获取美股标的涨跌幅（带缓存）"""
+    cache_key = f"us_{ticker}"
+    cached = get_cached_fund_data(cache_key)
+    if cached:
+        return cached.get('change', 0.0)
     
-    # ==================== 主数据源：新浪财经接口（海外IP首选）====================
-    print(f"[{fund_code}] 尝试主数据源：新浪财经")
-    sina_url = f"http://hq.sinajs.cn/list=f_{fund_code}"
-    res = request_with_retry(sina_url)
-    if res:
-        try:
-            text = res.text.strip()
-            # 匹配返回内容，格式：var hq_str_f_162411="华宝标普油气上游股票人民币A,0.5420,0.5420,2026-03-10,1.12%,0.0061";
-            match = re.search(r'"(.*?)"', text)
-            if match:
-                content = match.group(1)
-                parts = content.split(',')
-                if len(parts) >= 4:
-                    official_nav = float(parts[1])
-                    nav_date_str = parts[3]
-                    # 校验数据有效性
-                    if official_nav > 0 and nav_date_str:
-                        result = {
-                            "nav": official_nav,
-                            "nav_date": nav_date_str
-                        }
-                        RUNTIME_CACHE['fund_nav_data'][fund_code] = result
-                        print(f"[{fund_code}] 新浪财经获取成功：净值{official_nav} | 日期{nav_date_str}")
-                        return result
-        except Exception as e:
-            print(f"[{fund_code}] 新浪财经接口解析失败: {str(e)}")
-    
-    # ==================== 备用数据源：天天基金接口（兜底）====================
-    print(f"[{fund_code}] 主数据源失败，尝试备用数据源：天天基金")
-    eastmoney_url = f"https://fund.eastmoney.com/pingzhongdata/{fund_code}.js"
-    headers = {
-        "Referer": f"https://fund.eastmoney.com/{fund_code}.html",
-        "Host": "fund.eastmoney.com"
-    }
-    res = request_with_retry(eastmoney_url, headers=headers)
-    if res:
-        try:
-            text = res.text
-            nav_match = re.search(r'var DWJZ="([\d.]+)";', text)
-            date_match = re.search(r'var JZRQ="([\d\-]+)";', text)
-            if nav_match and date_match:
-                official_nav = float(nav_match.group(1))
-                nav_date_str = date_match.group(1)
-                if official_nav > 0 and nav_date_str:
-                    result = {
-                        "nav": official_nav,
-                        "nav_date": nav_date_str
-                    }
-                    RUNTIME_CACHE['fund_nav_data'][fund_code] = result
-                    print(f"[{fund_code}] 天天基金获取成功：净值{official_nav} | 日期{nav_date_str}")
-                    return result
-        except Exception as e:
-            print(f"[{fund_code}] 天天基金接口解析失败: {str(e)}")
-    
-    # 所有数据源都失败
-    print(f"[{fund_code}] 所有数据源均获取净值失败")
-    return None
-
-def get_us_ticker_cumulative_change(ticker, nav_date_str):
-    """
-    【精准计算】计算对标美股从净值日期到现在的累计涨跌幅
-    1. 优先取盘前/盘后最新价格，白天A股时段也能拿到实时变动
-    2. 按净值日期对齐基准收盘价，解决T-1/T-2净值滞后问题
-    3. 同ticker单次运行只请求一次，减少频控
-    """
-    # 先查运行时缓存，同ticker复用数据
-    cache_key = f"{ticker}_{nav_date_str}"
-    if cache_key in RUNTIME_CACHE['us_ticker_data']:
-        return RUNTIME_CACHE['us_ticker_data'][cache_key]
-    
-    # 雅虎财经接口，取5天数据，覆盖净值滞后的场景，同时拿到K线和最新价格
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=5d"
     headers = {
-        "Referer": "https://finance.yahoo.com/",
-        "Host": "query1.finance.yahoo.com"
+        'User-Agent': random.choice([h['User-Agent'] for h in HEADERS_POOL]),
+        'Referer': 'https://finance.yahoo.com/'
     }
     
-    res = request_with_retry(url, headers=headers)
-    if not res:
-        print(f"{ticker} 美股数据请求失败，返回0涨幅")
+    response = safe_request(url, headers=headers, retry=1)
+    if not response:
         return 0.0
     
     try:
-        data = res.json()
-        chart_result = data['chart']['result'][0]
-        meta = chart_result['meta']
-        timestamp_list = chart_result['timestamp']
-        quote_data = chart_result['indicators']['quote'][0]
+        data = response.json()
+        if 'chart' not in data or 'result' not in data['chart'] or not data['chart']['result']:
+            return 0.0
         
-        # ==================== 步骤1：获取最新价格（优先盘前>盘后>常规收盘价）====================
-        latest_price = None
-        # 优先级：盘前价格 > 盘后价格 > 常规市场收盘价
-        if 'preMarketPrice' in meta and meta['preMarketPrice']:
-            latest_price = meta['preMarketPrice']
-            print(f"{ticker} 取盘前价格: {latest_price}")
-        elif 'postMarketPrice' in meta and meta['postMarketPrice']:
-            latest_price = meta['postMarketPrice']
-            print(f"{ticker} 取盘后价格: {latest_price}")
+        meta = data['chart']['result'][0]['meta']
+        latest = meta.get('regularMarketPrice', meta.get('previousClose', 0))
+        prev = meta.get('previousClose', 0)
+        
+        if latest <= 0 or prev <= 0:
+            change = 0.0
         else:
-            latest_price = meta.get('regularMarketPrice')
-            print(f"{ticker} 取常规收盘价: {latest_price}")
+            change = (latest - prev) / prev
         
-        if not latest_price or latest_price <= 0:
-            print(f"{ticker} 无有效最新价格，返回0涨幅")
-            return 0.0
-        
-        # ==================== 步骤2：找到净值日期对应的美股基准收盘价 ====================
-        # 把净值日期（北京时间字符串）转换成美东时间的日期，匹配美股交易日
-        nav_date_cn = datetime.strptime(nav_date_str, "%Y-%m-%d").replace(tzinfo=CN_TZ)
-        # 净值日期对应的美股交易日：QDII基金T日净值，对应的是T日美股收盘（北京时间T+1凌晨）
-        nav_date_us = nav_date_cn.astimezone(US_EAST_TZ).date()
-        
-        # 遍历5天的K线，找到对应日期的收盘价
-        base_close_price = None
-        for i, ts in enumerate(timestamp_list):
-            # 把K线的UTC时间戳转成美东时间
-            kline_datetime_utc = UTC_TZ.localize(datetime.utcfromtimestamp(ts))
-            kline_date_us = kline_datetime_utc.astimezone(US_EAST_TZ).date()
-            
-            # 找到和净值日期匹配的K线
-            if kline_date_us == nav_date_us:
-                close_list = quote_data['close']
-                if close_list and close_list[i]:
-                    base_close_price = close_list[i]
-                    print(f"{ticker} 匹配净值日期{nav_date_str} 基准收盘价: {base_close_price}")
-                    break
-        
-        # 如果没找到完全匹配的，取最近的一个收盘价兜底
-        if not base_close_price:
-            print(f"{ticker} 未找到{nav_date_str}对应K线，取最近收盘价兜底")
-            close_list = quote_data['close']
-            valid_closes = [c for c in close_list if c and c > 0]
-            if valid_closes:
-                base_close_price = valid_closes[-1]
-            else:
-                base_close_price = meta.get('previousClose')
-        
-        if not base_close_price or base_close_price <= 0:
-            print(f"{ticker} 无有效基准收盘价，返回0涨幅")
-            return 0.0
-        
-        # ==================== 步骤3：计算累计涨跌幅 ====================
-        cumulative_change = (latest_price - base_close_price) / base_close_price
-        print(f"{ticker} 累计涨跌幅: {cumulative_change:.4%}")
-        
-        # 存入运行时缓存
-        RUNTIME_CACHE['us_ticker_data'][cache_key] = cumulative_change
-        return cumulative_change
-    
-    except Exception as e:
-        print(f"解析{ticker}美股数据失败: {str(e)}")
+        # 缓存结果
+        set_cached_fund_data(cache_key, {'change': change})
+        return change
+    except:
         return 0.0
 
-def format_premium_pair(premium1, premium2):
-    """
-    格式化溢价率，保证【低溢价在左，高溢价在右】，同时返回显示颜色
-    """
-    min_p = min(premium1, premium2)
-    max_p = max(premium1, premium2)
+def format_premium(p1, p2):
+    """格式化溢价，低的在前"""
+    min_p = min(p1, p2) if p1 and p2 else (p1 or p2 or 0)
+    max_p = max(p1, p2) if p1 and p2 else (p1 or p2 or 0)
     
-    def format_single(p):
+    def fmt(p):
         sign = "+" if p > 0 else ""
         return f"{sign}{p:.2%}"
     
-    min_text = format_single(min_p)
-    max_text = format_single(max_p)
-    
-    # 颜色规则：按最高溢价判断，正红负绿
-    if max_p > 0:
-        color = "plus"
-    elif max_p < 0:
-        color = "minus"
-    else:
-        color = "neutral"
-    
-    return f"{min_text}~{max_text}", color
+    color = "plus" if max_p > 0 else "minus" if max_p < 0 else "neutral"
+    return f"{fmt(min_p)}~{fmt(max_p)}", color
 
-# ==================== 主运行函数 ====================
-def run_monitor_task():
-    now_cn = datetime.now(CN_TZ)
-    now_str = now_cn.strftime('%Y-%m-%d %H:%M:%S')
-    fund_result_list = []
-
-    # 遍历所有监控标的
+# ==================== 主函数 ====================
+def main():
+    now = datetime.now(CN_TZ)
+    now_str = now.strftime('%Y-%m-%d %H:%M:%S')
+    results = []
+    fail_count = 0
+    
+    # 1. 先获取集思录全量数据
+    print("获取集思录QDII/LOF全量数据...")
+    jisilu_data = get_jisilu_qdii_data()
+    
+    # 2. 遍历处理每个标的
     for idx, target in enumerate(MONITOR_TARGETS):
-        fund_code = target['code']
+        code = target['code']
         ticker = target['ticker']
-        print(f"\n===== 处理第{idx+1}/{len(MONITOR_TARGETS)}个标的: {fund_code} =====")
+        print(f"\n===== 处理第{idx+1}/{len(MONITOR_TARGETS)}个标的: {code} =====")
         
-        # 1. 获取场内行情（名称+实时价格）
-        market_info = get_cn_fund_market_info(fund_code)
-        fund_name = market_info['name']
-        market_price = market_info['price']
+        # 检查熔断阈值
+        if fail_count >= FAIL_THRESHOLD:
+            print(f"连续{FAIL_THRESHOLD}个标的失败，触发熔断，使用缓存数据")
+            cached = get_cached_fund_data(code)
+            if cached:
+                fund_data = cached
+                is_cache = True
+            else:
+                results.append({
+                    'max_premium': -9999,
+                    'html': f'''
+                    <div class="row">
+                        <div class="fund-info">
+                            <div class="name">{code}<span class="warn-tag">熔断无数据</span></div>
+                            <div class="code">代码: {code}</div>
+                        </div>
+                        <div class="premium neutral">--</div>
+                    </div>'''
+                })
+            continue
         
-        # 2. 获取官方净值+净值日期
-        nav_data = get_fund_official_nav(fund_code)
-        official_nav = nav_data['nav'] if nav_data else None
-        nav_date_str = nav_data['nav_date'] if nav_data else ""
+        # 2.1 尝试从集思录获取数据
+        fund_data = None
+        is_cache = False
         
-        # 3. 数据有效性判断，兜底处理
-        if not market_price:
-            print(f"{fund_code} 无有效场内价格")
+        if jisilu_data:
+            fund_data = get_fund_detail_from_jisilu(code, jisilu_data)
+        
+        # 2.2 集思录失败，尝试缓存
+        if not fund_data:
+            fund_data = get_cached_fund_data(code)
+            is_cache = True
+            if fund_data:
+                print(f"使用缓存数据: {code}")
+        
+        # 2.3 数据仍为空，标记失败
+        if not fund_data:
+            fail_count += 1
+            results.append({
+                'max_premium': -9999,
+                'html': f'''
+                <div class="row">
+                    <div class="fund-info">
+                        <div class="name">{code}<span class="warn-tag">无数据</span></div>
+                        <div class="code">代码: {code}</div>
+                    </div>
+                    <div class="premium neutral">--</div>
+                </div>'''
+            })
+            continue
+        
+        # 重置失败计数
+        fail_count = 0
+        
+        # 提取核心数据
+        name = fund_data.get('name', code)
+        nav = fund_data.get('nav')
+        market_price = fund_data.get('market_price')
+        nav_date = fund_data.get('nav_date', '')
+        premium_official = fund_data.get('premium_rate')
+        
+        # 2.4 计算实时估算溢价
+        if nav and market_price:
+            us_change = get_us_ticker_change(ticker)
+            estimated_nav = nav * (1 + us_change)
+            premium_estimated = (market_price - estimated_nav) / estimated_nav if estimated_nav else None
+            
+            # 格式化溢价显示
+            if premium_official and premium_estimated:
+                premium_text, color = format_premium(premium_official, premium_estimated)
+                max_premium = max(premium_official, premium_estimated)
+            elif premium_official:
+                premium_text, color = format_premium(premium_official, premium_official)
+                max_premium = premium_official
+            elif premium_estimated:
+                premium_text, color = format_premium(premium_estimated, premium_estimated)
+                max_premium = premium_estimated
+            else:
+                premium_text = "--"
+                color = "neutral"
+                max_premium = -9999
+            
+            # 构建HTML
+            tag = '<span class="cache-tag">缓存数据</span>' if is_cache else ''
             row_html = f'''
             <div class="row">
                 <div class="fund-info">
-                    <div class="name">{fund_name}<span class="warn-tag">无行情</span></div>
-                    <div class="code">代码: {fund_code}</div>
+                    <div class="name">{name}{tag}</div>
+                    <div class="code">代码: {code}</div>
+                    <div class="nav-date">净值日期: {nav_date}</div>
                 </div>
-                <div class="premium neutral">--</div>
-            </div>
-            '''
-            fund_result_list.append({
-                "max_premium": -9999,
-                "html": row_html
+                <div class="premium {color}">{premium_text}</div>
+            </div>'''
+            
+            results.append({
+                'max_premium': max_premium,
+                'html': row_html
             })
-            # 处理完休眠，防频控
-            time.sleep(random.uniform(REQUEST_SLEEP_MIN, REQUEST_SLEEP_MAX))
-            continue
-        
-        if not official_nav:
-            print(f"{fund_code} 无有效官方净值")
-            row_html = f'''
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">{fund_name}<span class="warn-tag">无净值</span></div>
-                    <div class="code">代码: {fund_code}</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            '''
-            fund_result_list.append({
-                "max_premium": -9999,
-                "html": row_html
+            
+            # 缓存数据（备用）
+            if not is_cache:
+                set_cached_fund_data(code, fund_data)
+        else:
+            fail_count += 1
+            results.append({
+                'max_premium': -9999,
+                'html': f'''
+                <div class="row">
+                    <div class="fund-info">
+                        <div class="name">{name}<span class="warn-tag">数据不全</span></div>
+                        <div class="code">代码: {code}</div>
+                    </div>
+                    <div class="premium neutral">--</div>
+                </div>'''
             })
-            # 处理完休眠，防频控
-            time.sleep(random.uniform(REQUEST_SLEEP_MIN, REQUEST_SLEEP_MAX))
-            continue
         
-        # 4. 双口径溢价率核心计算
-        # --- 口径1：官方净值溢价率（市场通用口径，和她理财对齐）---
-        premium_official = (market_price - official_nav) / official_nav
-        
-        # --- 口径2：精准估算溢价率（对齐净值日期的累计涨跌幅）---
-        cumulative_change = get_us_ticker_cumulative_change(ticker, nav_date_str)
-        estimated_nav = official_nav * (1 + cumulative_change)
-        premium_estimated = (market_price - estimated_nav) / estimated_nav
-        
-        # 5. 格式化显示
-        premium_text, color = format_premium_pair(premium_official, premium_estimated)
-        max_premium = max(premium_official, premium_estimated)
-        
-        # 6. 生成行HTML
-        row_html = f'''
-        <div class="row">
-            <div class="fund-info">
-                <div class="name">{fund_name}</div>
-                <div class="code">代码: {fund_code}</div>
-                <div class="nav-date">净值日期: {nav_date_str}</div>
-            </div>
-            <div class="premium {color}">{premium_text}</div>
-        </div>
-        '''
-        
-        fund_result_list.append({
-            "max_premium": max_premium,
-            "html": row_html
-        })
-        
-        # 【核心防频控】每个标的处理完，随机休眠，避免密集请求被封
-        time.sleep(random.uniform(REQUEST_SLEEP_MIN, REQUEST_SLEEP_MAX))
+        # 随机延迟
+        time.sleep(random.uniform(ITEM_SLEEP_MIN, ITEM_SLEEP_MAX))
     
-    # 按溢价从高到低排序，高溢价排在最前面
-    fund_result_list.sort(key=lambda x: x['max_premium'], reverse=True)
+    # 3. 按溢价排序
+    results.sort(key=lambda x: x['max_premium'], reverse=True)
     
-    # 生成最终HTML
-    final_html = HTML_TPL.format(
-        now_str=now_str,
-        content_html="".join([item['html'] for item in fund_result_list])
-    )
+    # 4. 生成HTML
+    content_html = ''.join([r['html'] for r in results])
+    final_html = HTML_TPL.format(now_str=now_str, content_html=content_html)
     
-    # 写入文件
+    # 5. 保存HTML
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(final_html)
     
-    print(f"\n✅ 监控任务全部完成 | 北京时间: {now_str} | 共处理{len(MONITOR_TARGETS)}个标的")
+    print(f"\n✅ 监控任务完成 | 北京时间: {now_str}")
+    print(f"📊 生成文件: index.html")
 
 if __name__ == "__main__":
-    run_monitor_task()
+    main()
