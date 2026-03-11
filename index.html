@@ -3,184 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LOF溢价全自动监控</title>
+    <title>Alpha 全自动监控</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; }
-        .container { max-width: 680px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }
-        .header { background: linear-gradient(135deg, #1890ff, #096dd9); color: white; padding: 20px; text-align: center; }
-        .header .title { font-size: 20px; font-weight: bold; }
-        .header .subinfo { font-size: 12px; margin-top: 8px; opacity: 0.9; }
-        .table-header { display: flex; justify-content: space-between; padding: 12px 20px; background: #fafafa; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #666; }
+        .container { max-width: 600px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }
+        .header { background: #1890ff; color: white; padding: 20px; text-align: center; }
         .row { display: flex; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }
-        .fund-info .name { font-weight: 500; font-size: 16px; color: #1f1f1f; }
-        .fund-info .code { font-size: 12px; color: #8c8c8c; margin-top: 2px; }
-        .fund-info .nav-date { font-size: 11px; color: #bfbfbf; margin-top: 2px; }
+        .name { font-weight: 500; font-size: 16px; color: #1f1f1f; }
+        .code { font-size: 12px; color: #8c8c8c; margin-top: 2px; }
         .premium { font-family: monospace; font-weight: 700; font-size: 16px; white-space: nowrap; }
         .plus { color: #cf1322; }
         .minus { color: #389e0d; }
         .neutral { color: #595959; }
-        .tag { font-size: 10px; padding: 1px 4px; border-radius: 3px; margin-left: 5px; }
-        .cache-tag { background: #e8f4ff; color: #1890ff; }
-        .warn-tag { background: #fff2e8; color: #d46b08; }
     </style>
     <meta http-equiv="refresh" content="60">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">📊 LOF溢价全自动监控</div>
-            <div class="subinfo">更新时间: 2026-03-11 22:57:01</div>
-            <div class="subinfo">格式：低溢价~高溢价 | 按溢价从高到低排序</div>
-        </div>
-        <div class="table-header">
-            <span>基金标的</span>
-            <span>溢价率区间</span>
+            <div style="font-size: 20px; font-weight: bold;">📊 Alpha 全自动监控</div>
+            <div style="font-size: 12px; margin-top: 8px;">更新时间: 2026-03-11 23:14:18</div>
+            <div style="font-size: 10px; margin-top: 4px; opacity: 0.9;">格式：官方净值溢价~实时估算溢价</div>
         </div>
         
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">华宝油气LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 162411</div>
-                </div>
-                <div class="premium neutral">--</div>
+        <div class="row">
+            <div>
+                <div class="name">华宝油气LOF</div>
+                <div class="code">代码: 162411</div>
             </div>
-            
+            <div class="premium minus">-2.38%~-2.38%</div>
+        </div>
             <div class="row">
-                <div class="fund-info">
-                    <div class="name">国泰商品LOF<span class="tag warn-tag">无净值</span></div>
+                <div>
+                    <div class="name">国泰原油LOF</div>
                     <div class="code">代码: 160216</div>
                 </div>
-                <div class="premium neutral">--</div>
+                <div class="premium neutral">无净值</div>
             </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">石油基金LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 160416</div>
-                </div>
-                <div class="premium neutral">--</div>
+        <div class="row">
+            <div>
+                <div class="name">南方原油LOF</div>
+                <div class="code">代码: 160416</div>
             </div>
-            
+            <div class="premium plus">+9.57%~+9.57%</div>
+        </div>
             <div class="row">
-                <div class="fund-info">
-                    <div class="name">原油LOF易方达<span class="tag warn-tag">无净值</span></div>
+                <div>
+                    <div class="name">易方达原油LOF</div>
                     <div class="code">代码: 161129</div>
                 </div>
-                <div class="premium neutral">--</div>
+                <div class="premium neutral">无净值</div>
             </div>
-            
             <div class="row">
-                <div class="fund-info">
-                    <div class="name">纳指科技ETF景顺<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 159509</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">全球芯片LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 501225</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">标普信息科技LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 161128</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">美国消费LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 162415</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">中概互联网LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 164906</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">标普500LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 161125</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">标普500ETF博时<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 513500</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">标普生物科技LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 161127</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">纳指ETF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 513100</div>
-                </div>
-                <div class="premium neutral">--</div>
-            </div>
-            
-            <div class="row">
-                <div class="fund-info">
-                    <div class="name">南方原油LOF<span class="tag warn-tag">无净值</span></div>
+                <div>
+                    <div class="name">南方原油LOF(C)</div>
                     <div class="code">代码: 501018</div>
                 </div>
-                <div class="premium neutral">--</div>
+                <div class="premium neutral">无净值</div>
             </div>
-            
             <div class="row">
-                <div class="fund-info">
-                    <div class="name">嘉实原油LOF<span class="tag warn-tag">无净值</span></div>
+                <div>
+                    <div class="name">嘉实原油LOF</div>
                     <div class="code">代码: 160723</div>
                 </div>
-                <div class="premium neutral">--</div>
+                <div class="premium neutral">无净值</div>
             </div>
-            
+        <div class="row">
+            <div>
+                <div class="name">广发石油LOF</div>
+                <div class="code">代码: 162719</div>
+            </div>
+            <div class="premium minus">-1.33%~-5.46%</div>
+        </div>
+        <div class="row">
+            <div>
+                <div class="name">易方达黄金主题</div>
+                <div class="code">代码: 161116</div>
+            </div>
+            <div class="premium plus">+3.92%~+4.98%</div>
+        </div>
             <div class="row">
-                <div class="fund-info">
-                    <div class="name">港美互联网LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 160644</div>
+                <div>
+                    <div class="name">嘉实黄金LOF</div>
+                    <div class="code">代码: 160719</div>
                 </div>
-                <div class="premium neutral">--</div>
+                <div class="premium neutral">无净值</div>
             </div>
-            
             <div class="row">
-                <div class="fund-info">
-                    <div class="name">黄金主题LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 161116</div>
+                <div>
+                    <div class="name">国泰黄金LOF</div>
+                    <div class="code">代码: 161226</div>
                 </div>
-                <div class="premium neutral">--</div>
+                <div class="premium neutral">无净值</div>
             </div>
-            
             <div class="row">
-                <div class="fund-info">
-                    <div class="name">石油LOF<span class="tag warn-tag">无净值</span></div>
-                    <div class="code">代码: 162719</div>
+                <div>
+                    <div class="name">汇添富黄金LOF</div>
+                    <div class="code">代码: 164701</div>
                 </div>
-                <div class="premium neutral">--</div>
+                <div class="premium neutral">无净值</div>
             </div>
-            
+        <div class="row">
+            <div>
+                <div class="name">纳指科技ETF</div>
+                <div class="code">代码: 159509</div>
+            </div>
+            <div class="premium plus">+14.74%~+14.74%</div>
+        </div>
+            <div class="row">
+                <div>
+                    <div class="name">全球芯片LOF</div>
+                    <div class="code">代码: 501225</div>
+                </div>
+                <div class="premium neutral">无净值</div>
+            </div>
+        <div class="row">
+            <div>
+                <div class="name">标普科技LOF</div>
+                <div class="code">代码: 161128</div>
+            </div>
+            <div class="premium plus">+1.98%~+1.52%</div>
+        </div>
+        <div class="row">
+            <div>
+                <div class="name">生物科技LOF</div>
+                <div class="code">代码: 162415</div>
+            </div>
+            <div class="premium minus">-1.34%~-1.34%</div>
+        </div>
+            <div class="row">
+                <div>
+                    <div class="name">中概互联LOF</div>
+                    <div class="code">代码: 164906</div>
+                </div>
+                <div class="premium neutral">无净值</div>
+            </div>
+        <div class="row">
+            <div>
+                <div class="name">港美互联网LOF</div>
+                <div class="code">代码: 160644</div>
+            </div>
+            <div class="premium plus">+4.20%~+4.20%</div>
+        </div>
+        <div class="row">
+            <div>
+                <div class="name">标普500LOF</div>
+                <div class="code">代码: 161125</div>
+            </div>
+            <div class="premium plus">+0.76%~+0.71%</div>
+        </div>
+        <div class="row">
+            <div>
+                <div class="name">标普500ETF</div>
+                <div class="code">代码: 513500</div>
+            </div>
+            <div class="premium plus">+3.91%~+3.91%</div>
+        </div>
+        <div class="row">
+            <div>
+                <div class="name">纳指100LOF</div>
+                <div class="code">代码: 161127</div>
+            </div>
+            <div class="premium plus">+1.99%~+1.99%</div>
+        </div>
+        <div class="row">
+            <div>
+                <div class="name">纳指ETF</div>
+                <div class="code">代码: 513100</div>
+            </div>
+            <div class="premium plus">+3.87%~+3.58%</div>
+        </div>
     </div>
 </body>
 </html>
