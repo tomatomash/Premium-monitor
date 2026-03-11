@@ -11,6 +11,7 @@ FUND_MAP = {
     "160216": ["USO", "CrudeOil"],
 }
 
+# 粘贴你确认开启分享的表单链接
 FORM_URL = "https://my.feishu.cn/share/base/form/shrcnaa8FdSQQvGYSKTeEhzXAlb"
 WEBHOOK_URL = os.getenv('FEISHU_URL')
 THRESHOLD = 0.02 
@@ -20,25 +21,13 @@ def run_task():
     tz = pytz.timezone('Asia/Shanghai')
     now = datetime.now(tz)
     
-    # 1. 自动转换 API 链接
+    # 直接构建提交接口
     form_api = FORM_URL.replace("/share/base/form/", "/share/base/query/form/api/submit/")
-    # 获取表单元数据以匹配 ID
-    meta_api = FORM_URL.replace("/share/base/form/", "/share/base/query/form/api/get/")
     
-    try:
-        meta_res = requests.get(meta_api).json()
-        fields = meta_res['data']['form']['field_list']
-        # 建立 名字 -> ID 的映射
-        name_to_id = {f['title']: f['field_id'] for f in fields}
-        print(f"✅ 成功匹配表单字段: {name_to_id}")
-    except Exception as e:
-        print(f"❌ 无法获取表单字段 ID: {e}")
-        return
-
     for code, info in FUND_MAP.items():
         ticker, name = info[0], info[1]
         try:
-            # 抓取数据逻辑
+            # 1. 抓取数据
             res_gz = requests.get(f"https://fundgz.1234567.com.cn/js/{code}.js")
             last_nav = float(json.loads(res_gz.text.split('(')[1].split(')')[0])['dwjz'])
             
@@ -51,34 +40,32 @@ def run_task():
             est_nav = last_nav * change
             arb_gap = (price - est_nav) / est_nav
             
-            # 2. 构造动态提交载荷
-            payload = {"field_value_list": []}
-            data_map = {
-                "Clock": now.timestamp() * 1000,
-                "Code": code,
-                "Market": price,
-                "Value": round(est_nav, 4),
-                "Gap": arb_gap
+            # 2. 构造载荷（直接使用你的列名作为 field_id，这是飞书表单的备选匹配逻辑）
+            payload = {
+                "field_value_list": [
+                    {"field_id": "Clock", "value": int(now.timestamp() * 1000)},
+                    {"field_id": "Code", "value": code},
+                    {"field_id": "Market", "value": price},
+                    {"field_id": "Value", "value": round(est_nav, 4)},
+                    {"field_id": "Gap", "value": arb_gap}
+                ]
             }
-            
-            for key, val in data_map.items():
-                if key in name_to_id:
-                    payload["field_value_list"].append({"field_id": name_to_id[key], "value": val})
 
-            # 3. 提交
+            # 3. 提交数据
             sub_res = requests.post(form_api, json=payload)
             if sub_res.status_code == 200:
-                print(f"🚀 [{name}] 录入成功！Gap: {arb_gap:.2%}")
+                print(f"✅ [{name}] 成功录入表格! Gap: {arb_gap:.2%}")
             else:
-                print(f"⚠️ [{name}] 录入失败: {sub_res.text}")
+                # 如果还是不行，打印出飞书返回的具体错误，方便我定位
+                print(f"❌ [{name}] 录入失败，状态码: {sub_res.status_code}, 返回: {sub_res.text}")
 
-            # 4. 紧急预警
+            # 4. 2% 溢价预警 (北京时间 14:00-15:05)
             if arb_gap > THRESHOLD and time(14, 0) <= now.time() <= time(15, 5):
-                alert_msg = f"🚨 GAP ALERT\nS: {code}\nA: {arb_gap:.2%}\nCheck Alpha_Log."
+                alert_msg = f"🚨 GAP ALERT\nS: {code}\nA: {arb_gap:.2%}"
                 requests.post(WEBHOOK_URL, json={"msg_type":"text","content":{"text":alert_msg}})
                 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"💥 运行出错: {e}")
 
 if __name__ == "__main__":
     run_task()
