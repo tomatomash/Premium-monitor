@@ -43,13 +43,17 @@ def run():
             else:
                 us_change = get_market_data(info['ticker'])
 
+            # 3. 精算
             p1 = (mp - nav) / nav
             est_nav = nav * (1 + (us_change + fx_change) * info['w'])
             p2 = (mp - est_nav) / est_nav
             
-            results.append({"code": code, "name": info['name'], "p1": p1, "p2": p2, "color": "plus" if p2 > 0 else "minus"})
-        except Exception as e:
-            print(f"Error for {code}: {e}")
-            continue
+            # 添加这一行，确保日志里能看到
+            print(f"DEBUG: {info['name']} | P1: {p1:.2%} | P2: {p2:.2%}")
+            
+            results.append({
+                "code": code, "name": info['name'], "p1": p1, "p2": p2,
+                "color": "plus" if p2 > 0 else "minus"
+            })
 
     # ... (后续渲染逻辑保持不变)
