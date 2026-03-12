@@ -3,8 +3,8 @@ name: 低频监控 (休市时段)
 on:
   workflow_dispatch:
   schedule:
-    # 避开高频时段，每小时运行一次
-    - cron: '0 0,7-23 * * *'
+    # 修改为每小时运行一次，不再避开任何时段
+    - cron: '0 * * * *'
 
 jobs:
   run_monitor:
