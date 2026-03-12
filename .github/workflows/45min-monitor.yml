@@ -3,14 +3,13 @@ name: 45min-monitor
 on:
   workflow_dispatch:
   schedule:
-    # 修改为每 45 分钟运行一次
     - cron: '*/45 * * * *'
 
 jobs:
   run_monitor:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # 需要写入权限以推送到 gh-pages
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
@@ -28,10 +27,10 @@ jobs:
           FEISHU_URL: ${{ secrets.FEISHU_URL }}
         run: python monitor.py
 
-      - name: 将网页部署到 GitHub Pages
+      - name: 部署到 GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./
-          publish_files: index.html
+          publish_dir: .
+          publish_file: index.html # 注意：参数名修正为 publish_file (单数)
           keep_files: true
