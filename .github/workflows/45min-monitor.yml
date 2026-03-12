@@ -27,10 +27,9 @@ jobs:
           FEISHU_URL: ${{ secrets.FEISHU_URL }}
         run: python monitor.py
 
-      - name: 部署到 GitHub Pages
+      - name: 将网页部署到 GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
-          # 删除 publish_file: index.html 这一行，它是不支持的
           keep_files: true
