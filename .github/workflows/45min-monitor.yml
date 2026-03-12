@@ -32,5 +32,5 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
-          publish_file: index.html # 注意：参数名修正为 publish_file (单数)
+          # 删除 publish_file: index.html 这一行，它是不支持的
           keep_files: true
