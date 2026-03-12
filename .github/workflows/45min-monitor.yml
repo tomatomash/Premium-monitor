@@ -1,35 +1,21 @@
 name: 45min-monitor
-
 on:
   workflow_dispatch:
   schedule:
     - cron: '*/45 * * * *'
-
 jobs:
   run_monitor:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 需要写入权限以推送到 gh-pages
+      contents: write
     steps:
-      - name: 拉取代码
-        uses: actions/checkout@v4
-
-      - name: 准备 Python 环境
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: 安装依赖库
-        run: pip install requests pytz
-
-      - name: 执行监控并生成网页
-        env:
-          FEISHU_URL: ${{ secrets.FEISHU_URL }}
-        run: python monitor.py
-
-      - name: 将网页部署到 GitHub Pages
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.10'}
+      - run: pip install requests pytz
+      - run: python monitor.py
+      - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
-          keep_files: true
