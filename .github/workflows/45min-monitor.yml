@@ -1,4 +1,4 @@
-name: 低频监控 (休市时段)
+name: 45min-monitor
 
 on:
   workflow_dispatch:
