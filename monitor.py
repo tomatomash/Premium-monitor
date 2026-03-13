@@ -27,44 +27,54 @@ def run():
     for code, info in FUND_CONFIG.items():
         try:
             # ---------------------------------------------------------
-            # 轨道 A：深市 (16开头) - 100% 回滚至你最满意的原始代码
+            # 轨道 A：深市 (16/15等) - 严格保持原始逻辑
             # ---------------------------------------------------------
             if not code.startswith('5'):
-                # 原始抓取逻辑
                 nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
                 nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
-                p_res = requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=5)
-                mp = float(p_res.text.split('~')[3])
                 
-                # 原始运算逻辑
+                price_res = requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=5)
+                mp = float(price_res.text.split('~')[3])
+                
                 asset_change = get_market_data(info['ticker'])
                 est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
                 p1 = (mp - nav) / nav
                 p2 = (mp - est_nav) / est_nav
-                print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
             # ---------------------------------------------------------
-            # 轨道 B：沪市 (5开头) - 采用“影子逆推”消除 T-2 延迟
+            # 轨道 B：沪市 (5开头) - 启用东财专业 API (针对 501225 彻底解困)
             # ---------------------------------------------------------
             else:
-                # 1. 抓取腾讯接口的昨收价 (对于沪市，这通常包含 T-2 的涨跌)
-                p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
-                parts = p_res.text.split('~')
-                mp = float(parts[3])    # 现价
-                last_close = float(parts[4]) # 昨收
+                # 抓取东财沪深行情快照 (secid=1. 代表沪市)
+                # 这个接口能返回真正的 f31:单位净值 和 f2:最新价
+                url = f"https://push2.eastmoney.com/api/qt/stock/get?secid=1.{code}&fields=f2,f31"
+                em_res = requests.get(url, headers=HEADERS, timeout=5).json()['data']
                 
-                # 2. 影子还原：我们要找回被漏掉的 T-1 日涨幅
-                # 沪市 P2 偏低是因为基准没算昨晚美股。我们假设“影子溢价”应在 P1 基础上叠加
+                # 单位净值 (如果 f31 失效，则通过天天基金做二次兜底)
+                nav = float(em_res['f31']) if em_res['f31'] != "-" else 0.0
+                if nav <= 0:
+                    try:
+                        r = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", timeout=5)
+                        nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', r.text).group(1))['dwjz'])
+                    except: nav = 1.0 # 最后的保底
+                
+                mp = float(em_res['f2']) / 1000 if em_res['f2'] != "-" else 0.0
+                if mp <= 0: # 备用现价来源
+                    p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", timeout=5)
+                    mp = float(p_res.text.split('~')[3])
+                
                 asset_change = get_market_data(info['ticker'])
                 
-                # 核心修正：501225 的 P2 应该是场内相对于“真实实时净值”的溢价
-                # 由于昨收基准落后，我们直接在 P1 (相对于昨收) 的基础上
-                # 补回【当日资产涨幅】和【历史断层固定差 4.8%】
-                p1 = (mp - last_close) / last_close
-                p2 = p1 + (asset_change * info['w']) + 0.048 # 自动对齐 10.8% 的补丁
-                print(f"CHECK: {code} {info['name']} (Shadow Mode) -> P1:{p1:.2%}, P2:{p2:.2%}")
+                # 沪市逻辑完全镜像深市公式：实现真正的数据对齐
+                est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
+                p1 = (mp - nav) / nav
+                p2 = (mp - est_nav) / est_nav
 
-            results.append({"code": code, "name": info['name'], "p1": p1, "p2": p2, "color": "plus" if p2 > 0.02 else "minus"})
+            results.append({
+                "code": code, "name": info['name'], "p1": p1, "p2": p2,
+                "color": "plus" if p2 > 0.02 else "minus"
+            })
+            print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
         except Exception as e:
             print(f"ERROR: {code} 轨道故障: {e}")
@@ -73,6 +83,8 @@ def run():
     rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
     html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee;font-family:sans-serif;}}.plus{{color:#cf1322;font-weight:bold;}}.minus{{color:#389e0d;}}.premium{{text-align:right;}}</style></head><body><div style="max-width:480px;margin:auto;"><h3>溢价精算 Alpha</h3><p>更新时间: {now_str}</p>{rows}</div></body></html>'
     
-    with open("index.html", "w", encoding="utf-8") as f: f.write(html)
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(html)
 
-if __name__ == "__main__": run()
+if __name__ == "__main__":
+    run()
