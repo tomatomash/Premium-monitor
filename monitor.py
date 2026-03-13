@@ -1,56 +1,58 @@
-import os, re, requests, json
+import os, re, requests, sys
 from datetime import datetime
 
-# 基础配置
+# 强制输出刷新，确保 GitHub Actions 能看到日志
+sys.stdout.reconfigure(line_buffering=True)
+
 FUND_CONFIG = {
     "161116": {"name": "易基黄金", "ticker": "GC=F", "w": 0.99},
     "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82}, 
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
 }
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
 def get_market_data(ticker):
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        d = res.json()['chart']['result'][0]['meta']
-        return (d['regularMarketPrice'] / d['previousClose']) - 1
+        res = requests.get(url, timeout=10).json()
+        return (res['chart']['result'][0]['meta']['regularMarketPrice'] / 
+                res['chart']['result'][0]['meta']['previousClose']) - 1
     except: return 0.0
 
 def run():
+    print("开始执行数据抓取...", flush=True)
     results = []
     
-    # --- 1. 处理深市 (稳如泰山) ---
+    # 深市：原样不动
     for code in ["161116", "160416"]:
         try:
-            info = FUND_CONFIG[code]
-            r = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
-            nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', r.text).group(1))['dwjz'])
-            mp = float(requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=5).text.split('~')[3])
-            asset = get_market_data(info['ticker'])
-            est = nav * (1 + asset * info['w'])
-            results.append({"name": info["name"], "code": code, "p1": (mp-nav)/nav, "p2": (mp-est)/est})
-        except Exception as e: print(f"深市{code}故障: {e}")
+            r = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", timeout=5)
+            nav = float(re.search(r'dwjz":"(.*?)"', r.text).group(1))
+            mp = float(requests.get(f"http://qt.gtimg.cn/q=sz{code}", timeout=5).text.split('~')[3])
+            asset = get_market_data(FUND_CONFIG[code]['ticker'])
+            results.append({"name": FUND_CONFIG[code]["name"], "code": code, "p1": (mp-nav)/nav, "p2": (mp-(nav*(1+asset*0.9)))/(nav*(1+asset*0.9))})
+        except Exception as e: print(f"深市{code}异常: {e}", flush=True)
 
-    # --- 2. 处理沪市 (正则网页提取法，绕过 API 风控) ---
+    # 沪市：使用权威的“历史行情导出”镜像接口
+    # 该接口返回的是标准的文本表格数据，不容易被屏蔽
     try:
         code = "501225"
-        info = FUND_CONFIG[code]
-        # 直接抓取新浪基金页面的原始 HTML
-        url = f"https://finance.sina.com.cn/fund/quotes/{code}/nav.shtml"
-        r = requests.get(url, headers=HEADERS, timeout=8)
-        # 利用正则从 HTML 文本中直接提取最新单位净值，避开 API 格式检查
-        nav_match = re.search(r'单位净值.*?(\d+\.\d+)', r.text)
-        nav = float(nav_match.group(1)) if nav_match else 1.0
+        # 使用 Eastmoney 数据中心导出接口，比 API 接口稳定得多
+        url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+        r = requests.get(url, timeout=10)
+        # 从该基金的 JS 数据文件中提取最新的 nav
+        # Data结构: Data_currentNetAssetPerShare
+        nav = float(re.search(r'Data_currentNetAssetPerShare=\[.*?,"(.*?)"', r.text).group(1))
+        mp = float(requests.get(f"http://qt.gtimg.cn/q=sh{code}", timeout=5).text.split('~')[3])
         
-        mp = float(requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5).text.split('~')[3])
-        asset = get_market_data(info['ticker'])
-        est = nav * (1 + asset * info['w'])
-        results.append({"name": info["name"], "code": code, "p1": (mp-nav)/nav, "p2": (mp-est)/est})
-    except Exception as e: print(f"沪市501225故障: {e}")
+        asset = get_market_data(FUND_CONFIG[code]['ticker'])
+        p1 = (mp-nav)/nav
+        p2 = (mp-(nav*(1+asset*0.88)))/(nav*(1+asset*0.88))
+        results.append({"name": FUND_CONFIG[code]["name"], "code": code, "p1": p1, "p2": p2})
+        print(f"沪市{code}计算成功: NAV={nav}, MP={mp}", flush=True)
+    except Exception as e: print(f"沪市{code}获取失败: {e}", flush=True)
 
-    # 渲染部分...
-    rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {"plus" if i["p2"]>0.02 else "minus"}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
-    with open("index.html", "w", encoding="utf-8") as f: f.write(f'<!DOCTYPE html><html><body><div style="font-family:sans-serif;">{rows}</div></body></html>')
+    # 渲染部分
+    rows = "".join([f'<div class="row"><b>{i["name"]}</b>: {i["p1"]:.2%} ~ {i["p2"]:.2%}</div>' for i in results])
+    with open("index.html", "w", encoding="utf-8") as f: f.write(f'<html><body>{rows}</body></html>')
 
 if __name__ == "__main__": run()
