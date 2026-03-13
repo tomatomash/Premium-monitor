@@ -28,7 +28,7 @@ def run():
     for code, info in FUND_CONFIG.items():
         try:
             # ---------------------------------------------------------
-            # 轨道 A：深市 (16开头) —— 完全不动
+            # 轨道 A：深市 (16/15等) - 物理封箱，绝对不动
             # ---------------------------------------------------------
             if not code.startswith('5'):
                 nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
@@ -40,23 +40,52 @@ def run():
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # ---------------------------------------------------------
-            # 轨道 B：沪市 (5开头) —— 终极修复
+            # 轨道 B：沪市 (5开头) - 终极修复，使用天天基金PC端接口
             # ---------------------------------------------------------
             else:
-                # 东方财富权威净值，专门解决 501225 拿不到净值的问题
-                nav = 1.0
+                nav = None
+                # 尝试1：天天基金PC端接口，对沪市基金更稳定
                 try:
-                    em_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
-                    res = requests.get(em_url, headers=HEADERS, timeout=5)
-                    match = re.search(r'^var fS_jz\s*=\s*([0-9.]+);', res.text, re.M)
+                    url = f"https://fund.eastmoney.com/{code}.html"
+                    res = requests.get(url, headers=HEADERS, timeout=5)
+                    # 用正则匹配净值，格式如：<span class="fundDetail-totalNet">1.2345</span>
+                    match = re.search(r'<span class="fundDetail-totalNet">([0-9.]+)</span>', res.text)
                     if match:
                         nav = float(match.group(1))
-                except:
-                    pass
+                        print(f"【沪市净值成功】{code} -> 天天基金PC端: {nav}")
+                except Exception as e:
+                    print(f"【沪市净值失败1】{code}: {e}")
+
+                # 尝试2：东方财富基金净值接口
+                if nav is None:
+                    try:
+                        em_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+                        res = requests.get(em_url, headers=HEADERS, timeout=5)
+                        match = re.search(r'^var fS_jz\s*=\s*([0-9.]+);', res.text, re.M)
+                        if match:
+                            nav = float(match.group(1))
+                            print(f"【沪市净值成功】{code} -> 东方财富: {nav}")
+                    except Exception as e:
+                        print(f"【沪市净值失败2】{code}: {e}")
+
+                # 尝试3：腾讯基金接口
+                if nav is None:
+                    try:
+                        t_url = f"https://proxy.finance.qq.com/fundapi/v1/fund/nav?code={code}"
+                        t_res = requests.get(t_url, headers=HEADERS, timeout=5).json()
+                        nav = float(t_res['data']['nav']['nav'])
+                        print(f"【沪市净值成功】{code} -> 腾讯: {nav}")
+                    except Exception as e:
+                        print(f"【沪市净值失败3】{code}: {e}")
+
+                # 如果所有尝试都失败，直接抛出错误，而不是用1.0保底
+                if nav is None:
+                    raise ValueError(f"无法获取{code}的净值，跳过计算")
 
                 # 实时价格
                 p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
                 mp = float(p_res.text.split('~')[3])
+                print(f"【沪市价格】{code} -> {mp}")
 
                 # 计算（和深市完全一样）
                 asset_change = get_market_data(info['ticker'])
@@ -72,7 +101,8 @@ def run():
             print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
         except Exception as e:
-            print(f"ERROR: {code} 出错: {e}")
+            print(f"ERROR: {code} 计算出错: {e}")
+            continue  # 出错就跳过，不影响其他基金
 
     # 生成网页
     rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
