@@ -40,23 +40,35 @@ def run():
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # ---------------------------------------------------------
-            # 轨道 B：沪市 (5开头) - 终极修复，使用天天基金PC端接口
+            # 轨道 B：沪市 (5开头) - 终极换源：新浪财经基金接口
             # ---------------------------------------------------------
             else:
                 nav = None
-                # 尝试1：天天基金PC端接口，对沪市基金更稳定
+                # 尝试1：新浪财经基金净值接口（对沪市LOF非常稳定）
                 try:
-                    url = f"https://fund.eastmoney.com/{code}.html"
+                    url = f"https://hq.sinajs.cn/list=fu_{code}"
                     res = requests.get(url, headers=HEADERS, timeout=5)
-                    # 用正则匹配净值，格式如：<span class="fundDetail-totalNet">1.2345</span>
-                    match = re.search(r'<span class="fundDetail-totalNet">([0-9.]+)</span>', res.text)
+                    # 新浪返回格式：var hq_str_fu_501225="全球芯片LOF,1.0234,1.0120,...";
+                    match = re.search(r'="[^,]+,([0-9.]+),', res.text)
                     if match:
                         nav = float(match.group(1))
-                        print(f"【沪市净值成功】{code} -> 天天基金PC端: {nav}")
+                        print(f"【沪市净值成功】{code} -> 新浪财经: {nav}")
                 except Exception as e:
                     print(f"【沪市净值失败1】{code}: {e}")
 
-                # 尝试2：东方财富基金净值接口
+                # 尝试2：天天基金PC端网页
+                if nav is None:
+                    try:
+                        url = f"https://fund.eastmoney.com/{code}.html"
+                        res = requests.get(url, headers=HEADERS, timeout=5)
+                        match = re.search(r'<span class="fundDetail-totalNet">([0-9.]+)</span>', res.text)
+                        if match:
+                            nav = float(match.group(1))
+                            print(f"【沪市净值成功】{code} -> 天天基金PC端: {nav}")
+                    except Exception as e:
+                        print(f"【沪市净值失败2】{code}: {e}")
+
+                # 尝试3：东方财富基金净值JS
                 if nav is None:
                     try:
                         em_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
@@ -66,19 +78,9 @@ def run():
                             nav = float(match.group(1))
                             print(f"【沪市净值成功】{code} -> 东方财富: {nav}")
                     except Exception as e:
-                        print(f"【沪市净值失败2】{code}: {e}")
-
-                # 尝试3：腾讯基金接口
-                if nav is None:
-                    try:
-                        t_url = f"https://proxy.finance.qq.com/fundapi/v1/fund/nav?code={code}"
-                        t_res = requests.get(t_url, headers=HEADERS, timeout=5).json()
-                        nav = float(t_res['data']['nav']['nav'])
-                        print(f"【沪市净值成功】{code} -> 腾讯: {nav}")
-                    except Exception as e:
                         print(f"【沪市净值失败3】{code}: {e}")
 
-                # 如果所有尝试都失败，直接抛出错误，而不是用1.0保底
+                # 如果所有尝试都失败，直接抛出错误，不使用保底值
                 if nav is None:
                     raise ValueError(f"无法获取{code}的净值，跳过计算")
 
