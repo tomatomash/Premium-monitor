@@ -1,7 +1,7 @@
 import os, re, requests, pytz, json
 from datetime import datetime
 
-# ==================== 泛用参数配置 ====================
+# ==================== 固化参数区 ====================
 FUND_CONFIG = {
     "161116": {"name": "易基黄金", "ticker": "GC=F", "w": 0.99},
     "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82}, 
@@ -25,53 +25,66 @@ def run():
     results = []
 
     for code, info in FUND_CONFIG.items():
+        # --- 每个标的完全隔离，报错互不干扰 ---
         try:
             nav = 0.0
-            is_static_nav = False # 判断 nav 是静态 T-1 净值还是动态昨收价
+            is_static_nav = False 
+            
+            # 1. 尝试获取天天基金 T-1 静态净值
+            try:
+                nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
+                if nav_res.status_code == 200 and "jsonpgz" in nav_res.text:
+                    match = re.search(r'jsonpgz\((.*?)\);', nav_res.text)
+                    if match:
+                        nav = float(json.loads(match.group(1))['dwjz'])
+                        is_static_nav = True
+            except: pass # 失败了就交给下面的备用方案
 
-            # --- 1. 获取净值基准 ---
-            nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
-            if "jsonpgz" in nav_res.text:
-                nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
-                is_static_nav = True # 拿到了 T-1 净值，需要叠加海外涨幅
-            else:
-                # 备用：从腾讯获取昨收价
-                p_res = requests.get(f"http://qt.gtimg.cn/q={'sh' if code.startswith(('5', '6')) else 'sz'}{code}", headers=HEADERS, timeout=5)
-                nav = float(p_res.text.split('~')[4]) 
-                is_static_nav = False # 昨收价已含海外波动，算法需调整
+            # 2. 如果没拿到静态净值，强制使用腾讯接口昨收价
+            if nav <= 0.001:
+                prefix = "sh" if code.startswith(('5', '6')) else "sz"
+                p_res = requests.get(f"http://qt.gtimg.cn/q={prefix}{code}", headers=HEADERS, timeout=5)
+                nav = float(p_res.text.split('~')[4])
+                is_static_nav = False
 
-            # --- 2. 获取场内现价 ---
-            p_res = requests.get(f"http://qt.gtimg.cn/q={'sh' if code.startswith(('5', '6')) else 'sz'}{code}", headers=HEADERS, timeout=5)
+            # 3. 获取场内现价
+            prefix = "sh" if code.startswith(('5', '6')) else "sz"
+            p_res = requests.get(f"http://qt.gtimg.cn/q={prefix}{code}", headers=HEADERS, timeout=5)
             mp = float(p_res.text.split('~')[3])
 
-            # --- 3. 影子净值精算逻辑 ---
+            # 4. 影子净值精算 (核心逻辑)
             asset_change = get_market_data(info['ticker'])
             
             if is_static_nav:
-                # 场景A：有 T-1 净值，计算：mp / (T-1净值 * T日资产波动 * T日汇率波动)
+                # 基准是 T-1 净值，叠加完整海外变动
                 est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
             else:
-                # 场景B：没净值拿昨收价，由于昨收价已对齐美股收盘，只需计算“当日汇率”和“盘中额外溢价”
-                # 此时 P2 应该更接近于 P1 的实时反馈
+                # 基准是已包含昨晚变动的“昨收价”，P2 需通过 P1 叠加当日资产实时增量来还原影子溢价
+                # 这种算法能自动对齐 10.8% 这种跳空缺口
                 est_nav = nav * (1 + (fx_change * 0.95))
+                # 针对影子净值缺失的补偿公式
+                p2_boost = asset_change * info['w']
+                p1 = (mp - nav) / nav
+                p2 = p1 + p2_boost
+                results.append({"name": info['name'], "code": code, "p1": p1, "p2": p2, "color": "plus" if p2 > 0.02 else "minus"})
+                print(f"CHECK: {code} {info['name']} (Shadow) -> P2:{p2:.2%}")
+                continue # 501225 走这个特殊分支
 
             p1 = (mp - nav) / nav
             p2 = (mp - est_nav) / est_nav
+            results.append({"name": info['name'], "code": code, "p1": p1, "p2": p2, "color": "plus" if p2 > 0.02 else "minus"})
+            print(f"CHECK: {code} {info['name']} (Static) -> P2:{p2:.2%}")
 
-            # --- 特殊修正：针对 501225 这种高度依赖影子净值的标的 ---
-            # 如果是场景B且是501225，我们必须手动对齐它相对于 SOXX 的历史基准误差
-            if not is_static_nav and code == "501225":
-                 # 核心修正：501225 的场内价格通常比其账面昨收价高出约 10% 的预估净值差
-                 p2 = p1 + (asset_change * info['w'])
-
-            results.append({"code": code, "name": info['name'], "p1": p1, "p2": p2, "color": "plus" if p2 > 0.02 else "minus"})
-            print(f"CHECK: {code} {info['name']} (Static:{is_static_nav}) -> P2:{p2:.2%}")
         except Exception as e:
-            print(f"ERROR: {code} | {e}")
+            print(f"SKIP: {code} 发生错误: {e}")
+            continue
 
+    # --- 5. 渲染 HTML ---
     rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
-    html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee;}}.plus{{color:#cf1322;font-weight:bold;}}.minus{{color:#389e0d;}}</style></head><body><div style="max-width:480px;margin:auto;"><h3>溢价精算 Alpha (逻辑自适应版)</h3><p>更新时间: {now_str}</p>{rows}</div></body></html>'
+    html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee;}}.plus{{color:#cf1322;font-weight:bold;}}.minus{{color:#389e0d;}}</style></head><body><div style="max-width:480px;margin:auto;"><h3>溢价精算 Alpha (最终固化版)</h3><p>更新时间: {now_str}</p>{rows}</div></body></html>'
     
-    with open("index.html", "w", encoding="utf-8") as f: f.write(html)
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(html)
 
-if __name__ == "__main__": run()
+if __name__ == "__main__":
+    run()
