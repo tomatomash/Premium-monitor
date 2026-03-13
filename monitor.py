@@ -6,7 +6,7 @@ FUND_CONFIG = {
     "161116": {"name": "易基黄金", "ticker": "GC=F", "w": 0.99},
     "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82},
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
-    "501018": {"name": "南方原油LOF", "ticker": "CL=F", "w": 0.95},  # 新增沪交所基金
+    "501018": {"name": "南方原油LOF", "ticker": "CL=F", "w": 0.95},
 }
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
@@ -44,38 +44,40 @@ def run():
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # =========================================================
-            # 轨道 B：沪市 (5开头) - 绝对分离，独立逻辑
+            # 轨道 B：沪市 (5开头) - 绝对分离，全新换源
             # =========================================================
             else:
                 nav = None
-                # 尝试1：沪市专用天天基金接口（和深市同源，但代码分离）
+                # 尝试1：雪球基金接口（沪市专用，Actions下更稳定）
                 try:
-                    nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=10) # 增加超时时间
-                    nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
-                    print(f"【沪市净值成功】{code} -> 天天基金: {nav}")
+                    url = f"https://stock.xueqiu.com/v5/stock/quote.json?symbol=FU{code}"
+                    res = requests.get(url, headers=HEADERS, timeout=10)
+                    data = res.json()
+                    nav = float(data['data']['quote']['net_value'])
+                    print(f"【沪市净值成功】{code} -> 雪球: {nav}")
                 except Exception as e:
                     print(f"【沪市净值失败1】{code}: {e}")
 
-                # 尝试2：沪市专用东方财富网页抓取
+                # 尝试2：同花顺i问财接口（沪市专用）
                 if nav is None:
                     try:
-                        url = f"https://fund.eastmoney.com/{code}.html"
+                        url = f"https://www.iwencai.com/stockpick/search?typed=1&preParams=&ts=1&f=1&qs=result_rewrite&selfsectsn=&querytype=stock&searchfilter=&tid=stockpick&w={code}"
                         res = requests.get(url, headers=HEADERS, timeout=10)
-                        # 匹配净值，格式如："单位净值：1.0234元"
-                        match = re.search(r'单位净值：([0-9.]+)元', res.text)
+                        match = re.search(r'单位净值.*?([0-9.]+)元', res.text)
                         if match:
                             nav = float(match.group(1))
-                            print(f"【沪市净值成功】{code} -> 东方财富: {nav}")
+                            print(f"【沪市净值成功】{code} -> 同花顺: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败2】{code}: {e}")
 
-                # 尝试3：沪市专用备用源（腾讯基金）
+                # 尝试3：集思录接口（沪市专用，专业基金数据）
                 if nav is None:
                     try:
-                        t_url = f"https://proxy.finance.qq.com/fundapi/v1/fund/nav?code={code}"
-                        t_res = requests.get(t_url, headers=HEADERS, timeout=10).json()
-                        nav = float(t_res['data']['nav']['nav'])
-                        print(f"【沪市净值成功】{code} -> 腾讯: {nav}")
+                        url = f"https://www.jisilu.cn/data/lof/detail/{code}/"
+                        res = requests.get(url, headers=HEADERS, timeout=10)
+                        data = res.json()
+                        nav = float(data['data']['fund_nav'])
+                        print(f"【沪市净值成功】{code} -> 集思录: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败3】{code}: {e}")
 
