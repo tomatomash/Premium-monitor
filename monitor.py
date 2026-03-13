@@ -44,40 +44,41 @@ def run():
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # =========================================================
-            # 轨道 B：沪市 (5开头) - 绝对分离，全新换源
+            # 轨道 B：沪市 (5开头) - 绝对分离，彻底换新源
             # =========================================================
             else:
                 nav = None
-                # 尝试1：雪球基金接口（沪市专用，Actions下更稳定）
+                # 尝试1：九方智投基金接口（沪市专用，Actions下更稳定）
                 try:
-                    url = f"https://stock.xueqiu.com/v5/stock/quote.json?symbol=FU{code}"
+                    url = f"https://fund.9fzt.com/api/fund/nav?code={code}"
                     res = requests.get(url, headers=HEADERS, timeout=10)
                     data = res.json()
-                    nav = float(data['data']['quote']['net_value'])
-                    print(f"【沪市净值成功】{code} -> 雪球: {nav}")
+                    nav = float(data['nav'])
+                    print(f"【沪市净值成功】{code} -> 九方智投: {nav}")
                 except Exception as e:
                     print(f"【沪市净值失败1】{code}: {e}")
 
-                # 尝试2：同花顺i问财接口（沪市专用）
+                # 尝试2：金融界基金接口（沪市专用）
                 if nav is None:
                     try:
-                        url = f"https://www.iwencai.com/stockpick/search?typed=1&preParams=&ts=1&f=1&qs=result_rewrite&selfsectsn=&querytype=stock&searchfilter=&tid=stockpick&w={code}"
+                        url = f"https://fund.jrj.com.cn/archives/{code}.shtml"
                         res = requests.get(url, headers=HEADERS, timeout=10)
                         match = re.search(r'单位净值.*?([0-9.]+)元', res.text)
                         if match:
                             nav = float(match.group(1))
-                            print(f"【沪市净值成功】{code} -> 同花顺: {nav}")
+                            print(f"【沪市净值成功】{code} -> 金融界: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败2】{code}: {e}")
 
-                # 尝试3：集思录接口（沪市专用，专业基金数据）
+                # 尝试3：天天基金备用接口（沪市专用，换路径）
                 if nav is None:
                     try:
-                        url = f"https://www.jisilu.cn/data/lof/detail/{code}/"
+                        url = f"https://fund.1234567.com.cn/f10/{code}.html"
                         res = requests.get(url, headers=HEADERS, timeout=10)
-                        data = res.json()
-                        nav = float(data['data']['fund_nav'])
-                        print(f"【沪市净值成功】{code} -> 集思录: {nav}")
+                        match = re.search(r'单位净值.*?([0-9.]+)元', res.text)
+                        if match:
+                            nav = float(match.group(1))
+                            print(f"【沪市净值成功】{code} -> 天天基金备用: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败3】{code}: {e}")
 
