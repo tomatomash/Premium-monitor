@@ -50,7 +50,7 @@ def run():
             else:
                 # 1. 切换至新浪财经接口获取沪市官方净值
                 # 格式: var hq_str_f_501225="全球芯片,1.0234,..." (第2位是净值)
-                s_res = requests.get(f"http://hq.sinajs.cn/list=f_{code}", headers=HEADERS, timeout=5)
+                s_res = requests.get(f"http://hq.sinajs.cn/list=f_{code}", headers=HEADERS, timeout=10)
                 nav = float(s_res.text.split(',')[1])
                 
                 # 2. 获取沪市场内现价
