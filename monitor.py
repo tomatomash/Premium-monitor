@@ -1,6 +1,5 @@
-import os, re, requests, json
+import requests, json
 
-# 配置
 FUND_CONFIG = {
     "161116": {"name": "易基黄金", "ticker": "GC=F", "w": 0.99},
     "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82}, 
@@ -16,40 +15,37 @@ def get_market_data(ticker):
     except: return 0.0
 
 def run():
-    sz_results = []
-    sh_results = []
+    final_output = []
     
-    # --- 1. 深交所：完全独立的计算闭环 ---
-    for code in ["161116", "160416"]:
+    # 1. 统一数据源：放弃正则，全部使用标准的 JS 数据文件 (Fundgz 接口)
+    for code, info in FUND_CONFIG.items():
         try:
-            r = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", timeout=5).text
-            nav = float(re.search(r'dwjz":"(.*?)"', r).group(1))
-            mp = float(requests.get(f"http://qt.gtimg.cn/q=sz{code}", timeout=5).text.split('~')[3])
-            asset = get_market_data(FUND_CONFIG[code]['ticker'])
-            est = nav * (1 + asset * FUND_CONFIG[code]['w'])
-            sz_results.append({"name": FUND_CONFIG[code]["name"], "p1": (mp-nav)/nav, "p2": (mp-est)/est})
-        except Exception as e: print(f"深交所{code}异常: {e}")
+            # 深市用 fundgz, 沪市用东方财富的基金配置文件
+            url = f"http://fundgz.1234567.com.cn/js/{code}.js" if code.startswith('1') else f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+            r = requests.get(url, timeout=8).text
+            
+            if code.startswith('1'):
+                nav = float(json.loads(r.split('jsonpgz(')[1].split(');')[0])['dwjz'])
+            else:
+                # 沪市专用：解析 Data_currentNetAssetPerShare
+                nav = float(r.split('Data_currentNetAssetPerShare=[')[1].split(']')[0].split('"')[1])
+            
+            market_type = 'sz' if code.startswith('1') else 'sh'
+            mp = float(requests.get(f"http://qt.gtimg.cn/q={market_type}{code}", timeout=5).text.split('~')[3])
+            
+            asset = get_market_data(info['ticker'])
+            est = nav * (1 + asset * info['w'])
+            
+            # 严格计算 P1/P2，并手动赋予不同变量
+            p1 = (mp - nav) / nav
+            p2 = (mp - est) / est
+            
+            final_output.append(f'<div class="row"><b>{info["name"]}</b>: {p1:.2%} ~ {p2:.2%}</div>')
+        except Exception as e:
+            print(f"DEBUG: {code} 获取失败: {e}", flush=True)
 
-    # --- 2. 沪交所：完全独立的计算闭环 (彻底换源) ---
-    try:
-        code = "501225"
-        # 换源：直接抓取天天基金沪市专用页面内容，不再请求 API
-        url = "https://fund.eastmoney.com/501225.html"
-        r = requests.get(url, timeout=10).text
-        # 从页面直接正则获取单位净值，最稳健
-        nav = float(re.search(r'data-value="(\d+\.\d+)"', r.split('单位净值')[1][:20]).group(1))
-        mp = float(requests.get(f"http://qt.gtimg.cn/q=sh{code}", timeout=5).text.split('~')[3])
-        asset = get_market_data(FUND_CONFIG[code]['ticker'])
-        est = nav * (1 + asset * FUND_CONFIG[code]['w'])
-        sh_results.append({"name": "全球芯片", "p1": (mp-nav)/nav, "p2": (mp-est)/est})
-    except Exception as e: print(f"沪交所501225异常: {e}")
-
-    # --- 3. 独立渲染 (绝对不会混淆) ---
-    html_content = "<html><body>"
-    for item in sz_results + sh_results:
-        html_content += f'<div class="row"><b>{item["name"]}</b>: {item["p1"]:.2%} ~ {item["p2"]:.2%}</div>'
-    html_content += "</body></html>"
-    
-    with open("index.html", "w", encoding="utf-8") as f: f.write(html_content)
+    # 2. 独立写入，防止干扰
+    with open("index.html", "w", encoding="utf-8") as f: 
+        f.write(f'<html><body>{"".join(final_output)}</body></html>')
 
 if __name__ == "__main__": run()
