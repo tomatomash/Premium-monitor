@@ -28,7 +28,7 @@ def run():
     for code, info in FUND_CONFIG.items():
         try:
             # ---------------------------------------------------------
-            # 轨道 A：深市 (16/15等) - 物理封箱，绝对不动
+            # 轨道 A：深市 (16开头) —— 完全不动
             # ---------------------------------------------------------
             if not code.startswith('5'):
                 nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
@@ -40,22 +40,25 @@ def run():
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # ---------------------------------------------------------
-            # 轨道 B：沪市 (5开头) - 已修复！不会再出现134%溢价
+            # 轨道 B：沪市 (5开头) —— 终极修复
             # ---------------------------------------------------------
             else:
-                # 强制和深市用一模一样的净值来源（彻底修复错误）
+                # 东方财富权威净值，专门解决 501225 拿不到净值的问题
                 nav = 1.0
                 try:
-                    nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
-                    nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
+                    em_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+                    res = requests.get(em_url, headers=HEADERS, timeout=5)
+                    match = re.search(r'^var fS_jz\s*=\s*([0-9.]+);', res.text, re.M)
+                    if match:
+                        nav = float(match.group(1))
                 except:
                     pass
 
-                # 价格获取（正确不变）
+                # 实时价格
                 p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
                 mp = float(p_res.text.split('~')[3])
 
-                # 计算逻辑 100% 对齐深市
+                # 计算（和深市完全一样）
                 asset_change = get_market_data(info['ticker'])
                 est_nav = nav * (1 + asset_change * info['w']) * (1 + fx_change * 0.95)
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
@@ -69,9 +72,9 @@ def run():
             print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
         except Exception as e:
-            print(f"ERROR: {code} 计算出错: {e}")
+            print(f"ERROR: {code} 出错: {e}")
 
-    # --- 输出网页 ---
+    # 生成网页
     rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
     html = f'''<!DOCTYPE html>
 <html>
