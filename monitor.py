@@ -44,41 +44,43 @@ def run():
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # =========================================================
-            # 轨道 B：沪市 (5开头) - 绝对分离，彻底换新源
+            # 轨道 B：沪市 (5开头) - 绝对分离，纯文本网页抓取
             # =========================================================
             else:
                 nav = None
-                # 尝试1：九方智投基金接口（沪市专用，Actions下更稳定）
+                # 尝试1：东方财富基金详情页（纯文本正则，避开JSON）
                 try:
-                    url = f"https://fund.9fzt.com/api/fund/nav?code={code}"
+                    url = f"https://fund.eastmoney.com/{code}.html"
                     res = requests.get(url, headers=HEADERS, timeout=10)
-                    data = res.json()
-                    nav = float(data['nav'])
-                    print(f"【沪市净值成功】{code} -> 九方智投: {nav}")
+                    # 匹配 "单位净值：1.0234元" 这种纯文本格式
+                    match = re.search(r'单位净值.*?([0-9]+\.[0-9]+)元', res.text, re.DOTALL)
+                    if match:
+                        nav = float(match.group(1))
+                        print(f"【沪市净值成功】{code} -> 东方财富网页: {nav}")
                 except Exception as e:
                     print(f"【沪市净值失败1】{code}: {e}")
 
-                # 尝试2：金融界基金接口（沪市专用）
+                # 尝试2：金融界基金页（纯文本正则）
                 if nav is None:
                     try:
-                        url = f"https://fund.jrj.com.cn/archives/{code}.shtml"
+                        url = f"https://fund.jrj.com.cn/{code}.shtml"
                         res = requests.get(url, headers=HEADERS, timeout=10)
-                        match = re.search(r'单位净值.*?([0-9.]+)元', res.text)
+                        match = re.search(r'单位净值.*?([0-9]+\.[0-9]+)元', res.text, re.DOTALL)
                         if match:
                             nav = float(match.group(1))
-                            print(f"【沪市净值成功】{code} -> 金融界: {nav}")
+                            print(f"【沪市净值成功】{code} -> 金融界网页: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败2】{code}: {e}")
 
-                # 尝试3：天天基金备用接口（沪市专用，换路径）
+                # 尝试3：同花顺基金页（纯文本正则）
                 if nav is None:
                     try:
-                        url = f"https://fund.1234567.com.cn/f10/{code}.html"
+                        url = f"https://fund.10jqka.com/{code}.html"
                         res = requests.get(url, headers=HEADERS, timeout=10)
-                        match = re.search(r'单位净值.*?([0-9.]+)元', res.text)
+                        match = re.search(r'单位净值.*?([0-9]+\.[0-9]+)元', res.text, re.DOTALL)
                         if match:
                             nav = float(match.group(1))
-                            print(f"【沪市净值成功】{code} -> 天天基金备用: {nav}")
+                            print(f"【沪市净值成功】{code} -> 同花顺网页: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败3】{code}: {e}")
 
@@ -96,11 +98,15 @@ def run():
                 est_nav = nav * (1 + asset_change * info['w']) * (1 + fx_change * 0.95)
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
+            # 自动排序：小的在左，大的在右
+            p_min = min(p1, p2)
+            p_max = max(p1, p2)
+
             # 颜色
             color = "plus" if p2 > 0.02 else "minus"
             results.append({
                 "code": code, "name": info["name"],
-                "p1": p1, "p2": p2, "color": color
+                "p_min": p_min, "p_max": p_max, "color": color
             })
             print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
@@ -108,8 +114,8 @@ def run():
             print(f"ERROR: {code} 计算出错: {e}")
             continue  # 出错就跳过，不影响其他基金
 
-    # 生成网页
-    rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
+    # 生成网页（显示时自动排序）
+    rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p_min"]:.2%} ~ {i["p_max"]:.2%}</div></div>' for i in results])
     html = f'''<!DOCTYPE html>
 <html>
 <head>
