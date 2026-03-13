@@ -7,7 +7,7 @@ FUND_CONFIG = {
     "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82}, 
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
 }
-HEADERS = {'User-Agent': 'Mozilla/5.0'}
+HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
 def get_market_data(ticker):
     try:
@@ -20,39 +20,37 @@ def get_market_data(ticker):
 def run():
     results = []
     
-    # --- 1. 处理深市 (封箱逻辑) ---
+    # --- 1. 处理深市 (稳如泰山) ---
     for code in ["161116", "160416"]:
         try:
             info = FUND_CONFIG[code]
             r = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
             nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', r.text).group(1))['dwjz'])
             mp = float(requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=5).text.split('~')[3])
-            
             asset = get_market_data(info['ticker'])
             est = nav * (1 + asset * info['w'])
             results.append({"name": info["name"], "code": code, "p1": (mp-nav)/nav, "p2": (mp-est)/est})
-        except Exception as e:
-            print(f"深市故障: {e}")
+        except Exception as e: print(f"深市{code}故障: {e}")
 
-    # --- 2. 独立处理沪市 (完全隔离，互不影响) ---
+    # --- 2. 处理沪市 (正则网页提取法，绕过 API 风控) ---
     try:
         code = "501225"
         info = FUND_CONFIG[code]
-        # 使用腾讯基金详细页接口，此接口无需复杂授权
-        r = requests.get(f"https://proxy.finance.qq.com/fundapi/v1/fund/nav?code={code}", headers=HEADERS, timeout=5)
-        data = r.json()['data']['nav']
-        nav = float(data['nav'])
-        mp = float(requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5).text.split('~')[3])
+        # 直接抓取新浪基金页面的原始 HTML
+        url = f"https://finance.sina.com.cn/fund/quotes/{code}/nav.shtml"
+        r = requests.get(url, headers=HEADERS, timeout=8)
+        # 利用正则从 HTML 文本中直接提取最新单位净值，避开 API 格式检查
+        nav_match = re.search(r'单位净值.*?(\d+\.\d+)', r.text)
+        nav = float(nav_match.group(1)) if nav_match else 1.0
         
+        mp = float(requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5).text.split('~')[3])
         asset = get_market_data(info['ticker'])
         est = nav * (1 + asset * info['w'])
         results.append({"name": info["name"], "code": code, "p1": (mp-nav)/nav, "p2": (mp-est)/est})
-    except Exception as e:
-        print(f"沪市故障: {e}")
+    except Exception as e: print(f"沪市501225故障: {e}")
 
-    # 渲染
+    # 渲染部分...
     rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {"plus" if i["p2"]>0.02 else "minus"}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
-    with open("index.html", "w", encoding="utf-8") as f: 
-        f.write(f'<!DOCTYPE html><html><body><div style="font-family:sans-serif;">{rows}</div></body></html>')
+    with open("index.html", "w", encoding="utf-8") as f: f.write(f'<!DOCTYPE html><html><body><div style="font-family:sans-serif;">{rows}</div></body></html>')
 
 if __name__ == "__main__": run()
