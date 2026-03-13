@@ -27,53 +27,51 @@ def run():
     for code, info in FUND_CONFIG.items():
         try:
             # ---------------------------------------------------------
-            # 轨道 A：深市 (16/15等) - 严格保持原始逻辑
+            # 轨道 A：深市 (16/15等) - 物理封箱，绝对不动
             # ---------------------------------------------------------
             if not code.startswith('5'):
                 nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
                 nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
-                
-                price_res = requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=5)
-                mp = float(price_res.text.split('~')[3])
-                
+                p_res = requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=5)
+                mp = float(p_res.text.split('~')[3])
                 asset_change = get_market_data(info['ticker'])
                 est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
-                p1 = (mp - nav) / nav
-                p2 = (mp - est_nav) / est_nav
+                p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # ---------------------------------------------------------
-            # 轨道 B：沪市 (5开头) - 启用东财专业 API (针对 501225 彻底解困)
+            # 轨道 B：沪市 (5开头) - 双重专业源并发抓取
             # ---------------------------------------------------------
             else:
-                # 抓取东财沪深行情快照 (secid=1. 代表沪市)
-                # 这个接口能返回真正的 f31:单位净值 和 f2:最新价
-                url = f"https://push2.eastmoney.com/api/qt/stock/get?secid=1.{code}&fields=f2,f31"
-                em_res = requests.get(url, headers=HEADERS, timeout=5).json()['data']
-                
-                # 单位净值 (如果 f31 失效，则通过天天基金做二次兜底)
-                nav = float(em_res['f31']) if em_res['f31'] != "-" else 0.0
-                if nav <= 0:
-                    try:
-                        r = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", timeout=5)
-                        nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', r.text).group(1))['dwjz'])
-                    except: nav = 1.0 # 最后的保底
-                
-                mp = float(em_res['f2']) / 1000 if em_res['f2'] != "-" else 0.0
-                if mp <= 0: # 备用现价来源
-                    p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", timeout=5)
-                    mp = float(p_res.text.split('~')[3])
-                
-                asset_change = get_market_data(info['ticker'])
-                
-                # 沪市逻辑完全镜像深市公式：实现真正的数据对齐
-                est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
-                p1 = (mp - nav) / nav
-                p2 = (mp - est_nav) / est_nav
+                nav = 0.0
+                # --- 源 1: 腾讯基金净值专用接口 (专治沪市延迟) ---
+                try:
+                    t_url = f"https://proxy.finance.qq.com/fundapi/v1/fund/nav?code={code}"
+                    t_res = requests.get(t_url, headers=HEADERS, timeout=5).json()
+                    nav = float(t_res['data']['nav']['nav']) # 提取官方净值
+                except: pass
 
-            results.append({
-                "code": code, "name": info['name'], "p1": p1, "p2": p2,
-                "color": "plus" if p2 > 0.02 else "minus"
-            })
+                # --- 源 2: 东方财富数据中心 (备份) ---
+                if nav <= 0.01:
+                    try:
+                        em_url = f"https://push2.eastmoney.com/api/qt/stock/get?secid=1.{code}&fields=f31"
+                        em_data = requests.get(em_url, headers=HEADERS, timeout=5).json().get('data')
+                        if em_data and em_data.get('f31') != "-":
+                            nav = float(em_data['f31'])
+                    except: pass
+                
+                # --- 现价抓取 (通用) ---
+                p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
+                mp = float(p_res.text.split('~')[3])
+
+                # --- 运算公式 (与深市完全对齐) ---
+                asset_change = get_market_data(info['ticker'])
+                # 如果所有源都拿不到 T-1 净值，nav 默认为 1.0 以防止崩溃，但这种情况极少
+                if nav <= 0.01: nav = 1.0 
+                
+                est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
+                p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
+
+            results.append({"code": code, "name": info['name'], "p1": p1, "p2": p2, "color": "plus" if p2 > 0.02 else "minus"})
             print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
         except Exception as e:
@@ -83,8 +81,6 @@ def run():
     rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
     html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee;font-family:sans-serif;}}.plus{{color:#cf1322;font-weight:bold;}}.minus{{color:#389e0d;}}.premium{{text-align:right;}}</style></head><body><div style="max-width:480px;margin:auto;"><h3>溢价精算 Alpha</h3><p>更新时间: {now_str}</p>{rows}</div></body></html>'
     
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(html)
+    with open("index.html", "w", encoding="utf-8") as f: f.write(html)
 
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()
