@@ -42,22 +42,27 @@ def run():
             # ---------------------------------------------------------
             # 轨道 B：沪市 (5 开头) —— 只优化这里，结构完全隔离
             # ---------------------------------------------------------
-            else:
-                # ===================== 修复点 1：用和深市一致的权威净值源 =====================
-                nav = 1.0  # 保底
-                try:
-                    # 跟深市完全一样：天天基金 T-1 净值（这是她理财用的真实口径）
-                    nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
-                    nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
-                except:
-                    try:
-                        # 备用：东方财富字段 f3 是最新净值
-                        em_url = f"https://push2.eastmoney.com/api/qt/stock/get?secid=1.{code}&fields=f3"
-                        em_data = requests.get(em_url, headers=HEADERS, timeout=5).json().get('data')
-                        if em_data and em_data.get('f3'):
-                            nav = float(em_data['f3'])
-                    except:
-                        pass
+            # ---------------------------------------------------------
+# 轨道 B：沪市 (5开头) - 只改这里，结构完全隔离
+# ---------------------------------------------------------
+else:
+    nav = 1.0
+    # 👉 强制用天天基金接口（和深市一模一样，彻底解决净值拿成涨幅的问题）
+    try:
+        nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
+        nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
+    except Exception as e:
+        print(f"【沪市净值失败】{code}: {e}")
+
+    # 价格不变
+    p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
+    mp = float(p_res.text.split('~')[3])
+
+    # 计算逻辑 100% 对齐深市
+    asset_change = get_market_data(info['ticker'])
+    est_nav = nav * (1 + asset_change * info['w']) * (1 + fx_change * 0.95)
+    p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
+
 
                 # ===================== 修复点 2：沪市价格抓取（统一用腾讯实时价） =====================
                 p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
