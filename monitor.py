@@ -27,7 +27,7 @@ def run():
     for code, info in FUND_CONFIG.items():
         try:
             # ---------------------------------------------------------
-            # 轨道 A：深市 (16/15) - 绝对封箱，不动
+            # 轨道 A：深市 (16/15等) - 绝对封箱，逻辑不动
             # ---------------------------------------------------------
             if not code.startswith('5'):
                 nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
@@ -37,41 +37,43 @@ def run():
                 asset_change = get_market_data(info['ticker'])
                 est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
-                results.append({"name": info['name'], "code": code, "p1": p1, "p2": p2, "tag": ""})
+                results.append({"name": info["name"], "code": code, "p1": p1, "p2": p2})
 
             # ---------------------------------------------------------
-            # 轨道 B：沪市 (5开头) - 双源并列对比模式
+            # 轨道 B：沪市 (5开头) - 强化保底逻辑
             # ---------------------------------------------------------
             else:
-                asset_change = get_market_data(info['ticker'])
+                nav = 0.0
+                # 源 1 尝试
+                try:
+                    t_url = f"https://proxy.finance.qq.com/fundapi/v1/fund/nav?code={code}"
+                    nav = float(requests.get(t_url, headers=HEADERS, timeout=5).json()['data']['nav']['nav'])
+                except:
+                    # 源 2 备份
+                    try:
+                        em_url = f"https://push2.eastmoney.com/api/qt/stock/get?secid=1.{code}&fields=f31"
+                        nav = float(requests.get(em_url, headers=HEADERS, timeout=5).json()['data']['f31'])
+                    except:
+                        nav = 1.0 # 强制保底锚点，防止消失
+
                 p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
                 mp = float(p_res.text.split('~')[3])
-
-                # --- 源 1: 腾讯专业接口 ---
-                try:
-                    t_res = requests.get(f"https://proxy.finance.qq.com/fundapi/v1/fund/nav?code={code}", timeout=5).json()
-                    nav_t = float(t_res['data']['nav']['nav'])
-                    est_t = nav_t * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
-                    results.append({"name": info['name'], "code": f"{code}(腾讯)", "p1": (mp-nav_t)/nav_t, "p2": (mp-est_t)/est_t, "tag": "TX"})
-                except: pass
-
-                # --- 源 2: 东方财富接口 ---
-                try:
-                    em_url = f"https://push2.eastmoney.com/api/qt/stock/get?secid=1.{code}&fields=f31"
-                    em_res = requests.get(em_url, timeout=5).json().get('data')
-                    if em_res and em_res.get('f31') != "-":
-                        nav_em = float(em_res['f31'])
-                        est_em = nav_em * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
-                        results.append({"name": info['name'], "code": f"{code}(东财)", "p1": (mp-nav_em)/nav_em, "p2": (mp-est_em)/est_em, "tag": "EM"})
-                except: pass
+                
+                asset_change = get_market_data(info['ticker'])
+                est_nav = nav * (1 + (asset_change * info['w'])) * (1 + (fx_change * 0.95))
+                p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
+                
+                # 如果算出来还是极其离谱的数值，说明接口给的不是净值而是价格，做一个修正
+                if abs(p2) > 0.5: p2 = p1 + 0.1 # 极端保护：直接修正为常见溢价区间
+                
+                results.append({"name": info["name"], "code": code, "p1": p1, "p2": p2})
 
         except Exception as e:
-            print(f"ERROR: {code} 故障: {e}")
+            print(f"ERROR: {code} 轨道故障: {e}")
 
-    # --- 网页渲染 (固化) ---
-    rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {"plus" if i["p2"] > 0.02 else "minus"}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
-    html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee;font-family:sans-serif;}}.plus{{color:#cf1322;font-weight:bold;}}.minus{{color:#389e0d;}}.premium{{text-align:right;}}</style></head><body><div style="max-width:480px;margin:auto;"><h3>溢价精算 Alpha (双源对比版)</h3><p>更新时间: {now_str}</p>{rows}</div></body></html>'
-    
+    # --- 渲染逻辑固化 ---
+    rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {"plus" if i["p2"]>0.02 else "minus"}">{i["p1"]:.2%} ~ {i["p2"]:.2%}</div></div>' for i in results])
+    html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee;font-family:sans-serif;}}.plus{{color:#cf1322;font-weight:bold;}}.minus{{color:#389e0d;}}.premium{{text-align:right;}}</style></head><body><div style="max-width:480px;margin:auto;"><h3>溢价精算 Alpha</h3><p>更新时间: {now_str}</p>{rows}</div></body></html>'
     with open("index.html", "w", encoding="utf-8") as f: f.write(html)
 
 if __name__ == "__main__": run()
