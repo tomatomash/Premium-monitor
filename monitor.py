@@ -9,7 +9,7 @@ from datetime import datetime
 FUND_CONFIG = {
     # ------ 海外与商品 (精准对标) ------
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
-    "160416": {"name": "石油基金", "ticker": "IXC", "w": 0.82}, # 已修正为 IXC
+    "160416": {"name": "石油基金", "ticker": "IXC", "w": 0.82},
     "161129": {"name": "原油基金", "ticker": "CL=F", "w": 0.95},
     "501018": {"name": "南方原油", "ticker": "CL=F", "w": 0.95},
     "160723": {"name": "嘉实原油", "ticker": "CL=F", "w": 0.90},
@@ -121,6 +121,29 @@ def detect_type(dwjz,gsz):
     return "NORMAL"
 
 
+# ================= 基金限购/申购状态（纯正则，无bs4）=================
+def get_fund_limit_status(code):
+    try:
+        url = f"https://fund.eastmoney.com/{code}.html"
+        txt = safe_get(url)
+        if not txt:
+            return "unknown", None, "获取失败"
+
+        if "暂停申购" in txt:
+            return "suspend", 0.0, "❌ 暂停申购"
+
+        limit_pattern = r"(限购|单日购买上限)(\d+\.?\d*)"
+        match = re.search(limit_pattern, txt)
+        if match:
+            amount = float(match.group(2))
+            return "limit", amount, f"⚠️ 限购{amount}元/日"
+
+        return "normal", None, "✅ 正常申购"
+
+    except Exception as e:
+        return "unknown", None, "获取异常"
+
+
 # ================= 主程序 =================
 
 def run():
@@ -148,14 +171,12 @@ def run():
 
             ticker = info["ticker"]
             
-            # --- 适配空代码的安全逻辑 ---
             if ticker:
                 asset_change = get_market_change(ticker)
                 fx = 1 + fx_change if ticker != "GC=F" else 1
             else:
                 asset_change = 0.0
-                fx = 1  # 国内基金不计算汇率波动
-            # --------------------------
+                fx = 1
 
             est_nav=dwjz*(1+asset_change*info["w"])*fx
 
@@ -165,10 +186,8 @@ def run():
             p1=(price-dwjz)/dwjz
             p2=(price-est_nav)/est_nav
 
-            # ===== Debug 输出 =====
             print(f"CHECK {code} {info['name']} {ftype} -> P1:{p1:.2%} P2:{p2:.2%}")
 
-            # ===== 网页使用平均值 =====
             premium=(p1+p2)/2
 
             # ================= 套利信号灯 =================
@@ -186,12 +205,16 @@ def run():
                 color = "discount"
             # ======================================================
 
+            # 限购状态
+            limit_status, limit_amount, limit_text = get_fund_limit_status(code)
+
             results.append({
                 "code":code,
                 "name":info["name"],
                 "premium":premium,
                 "signal":signal,
-                "color":color
+                "color":color,
+                "limit_text": limit_text
             })
 
         except Exception as e:
@@ -207,6 +230,7 @@ def run():
 <div class="right">
 <div class="premium {i['color']}">{i['premium']:.2%}</div>
 <div class="signal">{i['signal']}</div>
+<div class="limit">{i['limit_text']}</div>
 </div>
 </div>
 '''
@@ -225,6 +249,7 @@ body{{font-family:sans-serif;margin:0;padding:10px;background:#f6f6f6}}
 .right{{text-align:right}}
 .premium{{font-weight:bold;font-size:16px;margin-bottom:4px}}
 .signal{{font-size:14px;color:#666}}
+.limit{{font-size:13px;color:#999;margin-top:2px}}
 .strong_arbitrage{{color:#cf1322}}
 .watch{{color:#faad14}}
 .normal{{color:#1890ff}}
