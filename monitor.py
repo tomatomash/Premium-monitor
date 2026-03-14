@@ -1,3 +1,4 @@
+
 import re
 import json
 import requests
@@ -9,101 +10,91 @@ from datetime import datetime
 FUND_CONFIG = {
 
     # 深交所
-    "161116": {"name": "易基黄金", "ticker": "GC=F", "w": 0.99, "fx": False, "qdii": True},
-    "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82, "fx": True, "qdii": True},
+    "161116": {"name":"易基黄金","ticker":"GC=F","w":0.99,"fx":False,"nav_mode":"today"},
+    "160416": {"name":"石油基金","ticker":"XOP","w":0.82,"fx":True,"nav_mode":"today"},
 
     # 沪交所
-    "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88, "fx": True, "qdii": True},
-    "501018": {"name": "南方原油LOF", "ticker": "CL=F", "w": 0.95, "fx": False, "qdii": True},
-
+    "501225": {"name":"全球芯片","ticker":"SOXX","w":0.88,"fx":True,"nav_mode":"today"},
+    "501018": {"name":"南方原油LOF","ticker":"CL=F","w":0.95,"fx":False,"nav_mode":"t1"},
 }
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+HEADERS = {"User-Agent":"Mozilla/5.0"}
 
 CN_TZ = pytz.timezone("Asia/Shanghai")
 
 
-# ==================== 获取外盘涨跌 ====================
+# ==================== 外盘涨跌 ====================
 
 def get_market_change(ticker):
 
     try:
 
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
+        url=f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
 
-        r = requests.get(url, headers=HEADERS, timeout=10)
+        r=requests.get(url,headers=HEADERS,timeout=10)
 
-        data = r.json()["chart"]["result"][0]["meta"]
+        data=r.json()["chart"]["result"][0]["meta"]
 
-        price = data["regularMarketPrice"]
-        prev = data["previousClose"]
+        price=data["regularMarketPrice"]
+        prev=data["previousClose"]
 
-        return (price / prev) - 1
+        return (price/prev)-1
 
     except:
 
         return 0.0
 
 
-# ==================== 获取汇率 ====================
+# ==================== 汇率 ====================
 
 def get_fx():
 
     return get_market_change("CNH=F")
 
 
-# ==================== 深市净值 ====================
+# ==================== 深交所净值 ====================
 
 def get_sz_nav(code):
 
-    url = f"http://fundgz.1234567.com.cn/js/{code}.js"
+    r=requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js",headers=HEADERS,timeout=10)
 
-    r = requests.get(url, headers=HEADERS, timeout=10)
+    data=json.loads(re.search(r"jsonpgz\((.*?)\);",r.text).group(1))
 
-    data = json.loads(re.search(r"jsonpgz\((.*?)\);", r.text).group(1))
-
-    nav = float(data["dwjz"])
-
-    return nav
+    return float(data["dwjz"])
 
 
-# ==================== 深市价格 ====================
+# ==================== 深交所价格 ====================
 
 def get_sz_price(code):
 
-    r = requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=10)
+    r=requests.get(f"http://qt.gtimg.cn/q=sz{code}",headers=HEADERS,timeout=10)
 
     return float(r.text.split("~")[3])
 
 
-# ==================== 沪市净值（东方财富） ====================
+# ==================== 沪交所净值 ====================
 
 def get_sh_nav(code):
 
-    url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+    url=f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
 
-    r = requests.get(url, headers=HEADERS, timeout=10)
+    r=requests.get(url,headers=HEADERS,timeout=10)
 
-    match = re.search(r"Data_netWorthTrend = (.*?);", r.text)
+    match=re.search(r"Data_netWorthTrend = (.*?);",r.text)
 
-    data = json.loads(match.group(1))
+    data=json.loads(match.group(1))
 
-    # T-1 NAV
-    nav = float(data[-2]["y"])
+    t1_nav=float(data[-2]["y"])
+    today_nav=float(data[-1]["y"])
 
-    # 最新 NAV
-    today_nav = float(data[-1]["y"])
-
-    return nav, today_nav
+    return t1_nav,today_nav
 
 
-# ==================== 沪市价格 ====================
+# ==================== 沪交所价格 ====================
 
 def get_sh_price(code):
 
-    r = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=10)
+    r=requests.get(f"http://qt.gtimg.cn/q=sh{code}",headers=HEADERS,timeout=10)
 
     return float(r.text.split("~")[3])
 
@@ -112,14 +103,13 @@ def get_sh_price(code):
 
 def run():
 
-    now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    now=datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
-    fx_change = get_fx()
+    fx_change=get_fx()
 
-    results = []
+    results=[]
 
-
-    for code, info in FUND_CONFIG.items():
+    for code,info in FUND_CONFIG.items():
 
         try:
 
@@ -129,25 +119,22 @@ def run():
 
             if not code.startswith("5"):
 
-                nav = get_sz_nav(code)
+                nav=get_sz_nav(code)
 
-                mp = get_sz_price(code)
+                mp=get_sz_price(code)
 
-                asset_change = get_market_change(info["ticker"])
-
+                asset_change=get_market_change(info["ticker"])
 
                 if info["fx"]:
 
-                    est_nav = nav * (1 + asset_change * info["w"]) * (1 + fx_change)
+                    est_nav=nav*(1+asset_change*info["w"])*(1+fx_change)
 
                 else:
 
-                    est_nav = nav * (1 + asset_change * info["w"])
+                    est_nav=nav*(1+asset_change*info["w"])
 
-
-                p1 = (mp - nav) / nav
-                p2 = (mp - est_nav) / est_nav
-
+                p1=(mp-nav)/nav
+                p2=(mp-est_nav)/est_nav
 
                 print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
@@ -158,64 +145,61 @@ def run():
 
             else:
 
-                nav, today_nav = get_sh_nav(code)
+                t1_nav,today_nav=get_sh_nav(code)
 
-                mp = get_sh_price(code)
+                if info["nav_mode"]=="t1":
 
-                asset_change = get_market_change(info["ticker"])
-
-
-                if info["fx"]:
-
-                    est_nav = today_nav * (1 + asset_change * info["w"]) * (1 + fx_change)
+                    nav=t1_nav
 
                 else:
 
-                    est_nav = today_nav * (1 + asset_change * info["w"])
+                    nav=today_nav
 
+                mp=get_sh_price(code)
 
-                p1 = (mp - nav) / nav
-                p2 = (mp - est_nav) / est_nav
+                asset_change=get_market_change(info["ticker"])
 
+                if info["fx"]:
+
+                    est_nav=today_nav*(1+asset_change*info["w"])*(1+fx_change)
+
+                else:
+
+                    est_nav=today_nav*(1+asset_change*info["w"])
+
+                p1=(mp-nav)/nav
+                p2=(mp-est_nav)/est_nav
 
                 print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
+            p_min=min(p1,p2)
+            p_max=max(p1,p2)
 
-            p_min = min(p1, p2)
-            p_max = max(p1, p2)
-
-            color = "plus" if p2 > 0.02 else "minus"
-
+            color="plus" if p2>0.02 else "minus"
 
             results.append({
 
-                "code": code,
-                "name": info["name"],
-                "p_min": p_min,
-                "p_max": p_max,
-                "p2": p2,
-                "color": color
+                "code":code,
+                "name":info["name"],
+                "p_min":p_min,
+                "p_max":p_max,
+                "p2":p2,
+                "color":color
 
             })
-
 
         except Exception as e:
 
             print(f"ERROR: {code} -> {e}")
 
 
-    # ==================== 排序 ====================
+    results.sort(key=lambda x:x["p2"],reverse=True)
 
-    results.sort(key=lambda x: x["p2"], reverse=True)
-
-
-    # ==================== 生成HTML ====================
-
-    rows = ""
+    rows=""
 
     for i in results:
 
-        rows += f'''
+        rows+=f'''
 <div class="row">
 <div><b>{i["name"]}</b><br>{i["code"]}</div>
 <div class="premium {i["color"]}">
@@ -224,29 +208,29 @@ def run():
 </div>
 '''
 
-
-    html = f"""
+    html=f"""
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <style>
 
-body{{font-family:sans-serif;}}
+body{{font-family:sans-serif}}
 
-.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee;}}
+.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee}}
 
-.plus{{color:#cf1322;font-weight:bold;}}
+.plus{{color:#cf1322;font-weight:bold}}
 
-.minus{{color:#389e0d;}}
+.minus{{color:#389e0d}}
 
-.premium{{text-align:right;}}
+.premium{{text-align:right}}
 
 </style>
 </head>
+
 <body>
 
-<div style="max-width:480px;margin:auto;">
+<div style="max-width:480px;margin:auto">
 
 <h3>溢价精算 Alpha</h3>
 
@@ -260,11 +244,11 @@ body{{font-family:sans-serif;}}
 </html>
 """
 
-    with open("index.html", "w", encoding="utf-8") as f:
+    with open("index.html","w",encoding="utf-8") as f:
 
         f.write(html)
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
 
     run()
