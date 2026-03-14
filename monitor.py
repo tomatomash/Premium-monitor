@@ -9,17 +9,19 @@ from datetime import datetime
 
 FUND_CONFIG = {
 
-    "161116": {"name": "易基黄金", "ticker": "GC=F", "w": 0.99},
-    "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82},
+    # 深交所基金
+    "161116": {"name": "易基黄金", "ticker": "GC=F", "w": 0.99, "fx": False},
+    "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82, "fx": True},
 
-    "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
-    "501018": {"name": "南方原油LOF", "ticker": "CL=F", "w": 0.95},
+    # 沪交所 LOF
+    "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88, "fx": True},
+    "501018": {"name": "南方原油LOF", "ticker": "CL=F", "w": 0.95, "fx": False},
 
 }
 
 HEADERS = {
-'User-Agent':
-'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'
+    'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'
 }
 
 CN_TZ = pytz.timezone('Asia/Shanghai')
@@ -47,13 +49,26 @@ def get_market_data(ticker):
         return 0.0
 
 
+# ==================== 汇率变化 ====================
+
+def get_fx_change():
+
+    try:
+
+        return get_market_data("CNH=F")
+
+    except:
+
+        return 0.0
+
+
 # ==================== 主程序 ====================
 
 def run():
 
     now_str = datetime.now(CN_TZ).strftime('%Y-%m-%d %H:%M:%S')
 
-    fx_change = get_market_data("CNH=F")
+    fx_change = get_fx_change()
 
     results = []
 
@@ -93,8 +108,13 @@ def run():
                 # ---------- 外盘变化 ----------
                 asset_change = get_market_data(info['ticker'])
 
-                est_nav = nav * (1 + asset_change * info['w']) * (1 + fx_change * 0.95)
+                # ---------- 估算净值 ----------
+                if info["fx"]:
+                    est_nav = nav * (1 + asset_change * info['w']) * (1 + fx_change)
+                else:
+                    est_nav = nav * (1 + asset_change * info['w'])
 
+                # ---------- 溢价计算 ----------
                 p1 = (mp - nav) / nav
                 p2 = (mp - est_nav) / est_nav
 
@@ -177,7 +197,15 @@ def run():
 
                 asset_change = get_market_data(info['ticker'])
 
-                est_nav = nav * (1 + asset_change * info['w']) * (1 + fx_change * 0.95)
+                # ---------- 估算净值 ----------
+
+                if info["fx"]:
+                    est_nav = nav * (1 + asset_change * info['w']) * (1 + fx_change)
+                else:
+                    est_nav = nav * (1 + asset_change * info['w'])
+
+
+                # ---------- 溢价计算 ----------
 
                 p1 = (mp - nav) / nav
                 p2 = (mp - est_nav) / est_nav
@@ -185,7 +213,7 @@ def run():
                 print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
 
-            # ---------- 自动排序 ----------
+            # ==================== 排序数据 ====================
 
             p_min = min(p1, p2)
             p_max = max(p1, p2)
@@ -288,7 +316,6 @@ text-align:right;
 
 </html>
 '''
-
 
     with open("index.html", "w", encoding="utf-8") as f:
 
