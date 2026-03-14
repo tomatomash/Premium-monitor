@@ -21,7 +21,7 @@ HEADERS={"User-Agent":"Mozilla/5.0"}
 CN_TZ=pytz.timezone("Asia/Shanghai")
 
 
-# ================= 通用请求 =================
+# ================= 安全请求 =================
 
 def safe_get(url):
 
@@ -30,11 +30,9 @@ def safe_get(url):
         r=requests.get(url,headers=HEADERS,timeout=10)
 
         if r.status_code==200:
-
             return r.text
 
     except:
-
         pass
 
     return None
@@ -76,7 +74,6 @@ def get_fund_estimate(code):
     txt=safe_get(f"http://fundgz.1234567.com.cn/js/{code}.js")
 
     if not txt:
-
         return None,None
 
     try:
@@ -100,7 +97,6 @@ def get_em_nav(code):
     txt=safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
 
     if not txt:
-
         return None
 
     try:
@@ -121,23 +117,17 @@ def get_em_nav(code):
 def get_price(code):
 
     if code.startswith("5"):
-
         txt=safe_get(f"http://qt.gtimg.cn/q=sh{code}")
-
     else:
-
         txt=safe_get(f"http://qt.gtimg.cn/q=sz{code}")
 
     if not txt:
-
         return None
 
     try:
-
         return float(txt.split("~")[3])
 
     except:
-
         return None
 
 
@@ -146,7 +136,6 @@ def get_price(code):
 def detect_type(dwjz,gsz):
 
     if gsz and abs(gsz-dwjz)>0.005:
-
         return "QDII_LOF"
 
     return "NORMAL"
@@ -169,18 +158,15 @@ def run():
             price=get_price(code)
 
             if not price:
-
                 print(f"ERROR price {code}")
                 continue
 
             dwjz,gsz=get_fund_estimate(code)
 
             if not dwjz:
-
                 dwjz=get_em_nav(code)
 
             if not dwjz:
-
                 print(f"ERROR nav {code}")
                 continue
 
@@ -193,26 +179,26 @@ def run():
             est_nav=dwjz*(1+asset_change*info["w"])*fx
 
             if ftype=="QDII_LOF" and gsz:
-
                 est_nav=gsz
 
             p1=(price-dwjz)/dwjz
             p2=(price-est_nav)/est_nav
 
+            # ===== Debug 输出 =====
+
             print(f"CHECK {code} {info['name']} {ftype} -> P1:{p1:.2%} P2:{p2:.2%}")
 
-            p_min=min(p1,p2)
-            p_max=max(p1,p2)
+            # ===== 网页使用平均值 =====
 
-            color="plus" if p2>0.02 else "minus"
+            premium=(p1+p2)/2
+
+            color="plus" if premium>0.02 else "minus"
 
             results.append({
 
                 "code":code,
                 "name":info["name"],
-                "p_min":p_min,
-                "p_max":p_max,
-                "p2":p2,
+                "premium":premium,
                 "color":color
 
             })
@@ -221,7 +207,7 @@ def run():
 
             print("ERROR",code,e)
 
-    results.sort(key=lambda x:x["p2"],reverse=True)
+    results.sort(key=lambda x:x["premium"],reverse=True)
 
     rows=""
 
@@ -231,7 +217,7 @@ def run():
 <div class="row">
 <div><b>{i["name"]}</b><br>{i["code"]}</div>
 <div class="premium {i["color"]}">
-{i["p_min"]:.2%} ~ {i["p_max"]:.2%}
+{i["premium"]:.2%}
 </div>
 </div>
 '''
@@ -273,7 +259,6 @@ body{{font-family:sans-serif}}
 """
 
     with open("index.html","w",encoding="utf-8") as f:
-
         f.write(html)
 
 
