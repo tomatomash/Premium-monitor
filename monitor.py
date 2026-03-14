@@ -288,7 +288,7 @@ body{{font-family:sans-serif;margin:0;padding:10px;background:#f6f6f6}}
 <body>
 <div class="container">
 <div class="header">
-<h3 style="margin:0">溢价精算 Alpha</h3>
+<h3 style="margin:0">套利溢价率</h3>
 <p style="margin:5px 0 0;color:#666">更新时间: {now}</p>
 </div>
 {rows}
