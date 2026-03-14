@@ -5,7 +5,6 @@ import pytz
 from datetime import datetime
 
 # ================= 基金配置 =================
-# ================= 基金配置 =================
 FUND_CONFIG = {
     # ------ 海外与商品 (精准对标) ------
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
@@ -121,35 +120,51 @@ def detect_type(dwjz,gsz):
         return "QDII_LOF"
     return "NORMAL"
 
-# ================= 【优化】申购状态接口（稳定可用） =================
-# ！！！仅修改此处接口，返回格式与原函数完全一致，上层无任何感知
+# ================= 【独立模块】申购状态接口（天天基金网稳定源） =================
 def get_purchase_status(code):
+    """
+    独立封装的申购状态获取函数，返回 (状态字符串, 限购额度元)
+    不影响任何其他模块逻辑
+    """
     try:
-        # 替换为东方财富PC端稳定基金基础信息接口
-        url = f"https://fund.eastmoney.com/f10/F10DataApi.aspx?type=shaoer&code={code}"
+        # 天天基金网基金公告接口，包含最新申购状态和限购信息
+        url = f"https://fund.1234567.com.cn/data/1234567/f10/jjgg/{code}.js"
         txt = safe_get(url)
         if not txt:
-            return "未知", None
+            return "接口失败", None
         
-        # 解析申购状态 & 单日限购金额
+        # 解析JSONP格式
+        jsonp_match = re.search(r"jQuery\d+_\d+\((.*?)\);", txt)
+        if not jsonp_match:
+            return "解析失败", None
+        
+        data = json.loads(jsonp_match.group(1))
+        
         status = "开放申购"
         limit = None
         
-        # 匹配申购状态
-        if "暂停申购" in txt:
-            status = "暂停申购"
-        elif "限制申购" in txt or "限购" in txt:
-            status = "限制申购"
-        
-        # 匹配单日申购限额（单位：元）
-        limit_match = re.search(r'单日申购限额.*?[:：]\s*([\d,.]+)', txt)
-        if limit_match:
-            limit_str = limit_match.group(1).replace(',', '').strip()
-            limit = float(limit_str)
+        # 遍历公告，找到最新的申购相关公告
+        for item in data.get("Data", []):
+            title = item.get("title", "").strip()
+            if "暂停申购" in title:
+                status = "暂停申购"
+                break
+            elif "限制申购" in title or "限购" in title:
+                status = "限制申购"
+                # 提取限购金额，单位元
+                limit_match = re.search(r'(\d+(?:\.\d+)?)(?:万元|元)', title)
+                if limit_match:
+                    num = float(limit_match.group(1))
+                    if "万元" in title:
+                        limit = num * 10000  # 转换为元
+                    else:
+                        limit = num
+                break
         
         return status, limit
-    except:
-        return "未知", None
+    except Exception as e:
+        print(f"⚠️  获取申购状态异常 {code}: {str(e)}")
+        return "异常", None
 
 # ================= 格式化申购状态（原逻辑完全不动） =================
 def format_purchase_status(status,limit):
@@ -162,7 +177,7 @@ def format_purchase_status(status,limit):
             return f"{int(limit)}元"
     return "不限购"
 
-# ================= 主程序（完全不动） =================
+# ================= 主程序（仅添加申购状态打印，核心逻辑完全不变） =================
 def run():
     now=datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
     fx_change=get_fx()
@@ -198,7 +213,10 @@ def run():
 
             p1=(price-dwjz)/dwjz
             p2=(price-est_nav)/est_nav
-            print(f"CHECK {code} {info['name']} -> P1:{p1:.2%} P2:{p2:.2%}")
+            
+            # 获取并打印申购状态，和P1/P2一起显示
+            status, limit = get_purchase_status(code)
+            print(f"CHECK {code} {info['name']} -> P1:{p1:.2%} P2:{p2:.2%} 申购状态: {status} 限购额度: {limit}元")
 
             premium=(p1+p2)/2
             if premium >= 0.05:
@@ -214,7 +232,6 @@ def run():
                 signal = "⚫ 折价"
                 color = "discount"
 
-            status,limit=get_purchase_status(code)
             purchase=format_purchase_status(status,limit)
 
             results.append({
@@ -226,7 +243,7 @@ def run():
                 "purchase":purchase
             })
         except Exception as e:
-            print("ERROR",code,e)
+            print(f"ERROR {code}: {str(e)}")
 
     results.sort(key=lambda x:x["premium"],reverse=True)
     rows=""
