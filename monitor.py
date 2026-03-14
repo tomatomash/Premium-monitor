@@ -195,28 +195,36 @@ def get_purchase_status(code):
 
     try:
 
-        url=f"https://fundmobapi.eastmoney.com/FundMNewApi/FundBaseTypeInformation?FCODE={code}"
+        url=f"https://fundmobapi.eastmoney.com/FundMNewApi/FundBaseInfo?FCODE={code}"
 
         r=requests.get(url,headers=HEADERS,timeout=10)
 
         data=r.json()
 
-        info=data["Datas"]["FundBaseTypeInformation"]
+        info=data["Datas"]
 
-        status=info.get("PurchaseStatus","未知")
-        limit=info.get("PurchaseLimit")
+        # 申购状态
+        status=info.get("SGZT","未知")
 
-        if limit:
-            limit=float(limit)
+        # 限购额度
+        limit=info.get("SGRQ")
+
+        # 单日限购金额
+        limit_money=info.get("SGJE")
+
+        if limit_money and limit_money!="":
+            try:
+                limit_money=float(limit_money)
+            except:
+                limit_money=None
         else:
-            limit=None
+            limit_money=None
 
-        return status,limit
+        return status,limit_money
 
     except:
 
         return "未知",None
-
 
 # ================= 格式化申购状态 =================
 
