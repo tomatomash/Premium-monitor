@@ -1,21 +1,18 @@
-
 import re
 import json
 import requests
 import pytz
 from datetime import datetime
 
-# ==================== 基金配置 ====================
+# ================= 基金配置 =================
 
 FUND_CONFIG = {
 
-    # 深交所
-    "161116": {"name":"易基黄金","ticker":"GC=F","w":0.99,"fx":False,"nav_mode":"today"},
-    "160416": {"name":"石油基金","ticker":"XOP","w":0.82,"fx":True,"nav_mode":"today"},
+    "161116": {"name":"易基黄金","ticker":"GC=F","w":0.99,"fx":False},
+    "160416": {"name":"石油基金","ticker":"XOP","w":0.82,"fx":True},
 
-    # 沪交所
-    "501225": {"name":"全球芯片","ticker":"SOXX","w":0.88,"fx":True,"nav_mode":"today"},
-    "501018": {"name":"南方原油LOF","ticker":"CL=F","w":0.95,"fx":False,"nav_mode":"t1"},
+    "501225": {"name":"全球芯片","ticker":"SOXX","w":0.88,"fx":True},
+    "501018": {"name":"南方原油LOF","ticker":"CL=F","w":0.95,"fx":False},
 }
 
 HEADERS = {"User-Agent":"Mozilla/5.0"}
@@ -23,7 +20,7 @@ HEADERS = {"User-Agent":"Mozilla/5.0"}
 CN_TZ = pytz.timezone("Asia/Shanghai")
 
 
-# ==================== 外盘涨跌 ====================
+# ================= 外盘涨跌 =================
 
 def get_market_change(ticker):
 
@@ -45,61 +42,87 @@ def get_market_change(ticker):
         return 0.0
 
 
-# ==================== 汇率 ====================
+# ================= 汇率 =================
 
 def get_fx():
 
     return get_market_change("CNH=F")
 
 
-# ==================== 深交所净值 ====================
+# ================= 实时估值接口 =================
 
-def get_sz_nav(code):
+def get_estimate_nav(code):
 
-    r=requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js",headers=HEADERS,timeout=10)
+    try:
 
-    data=json.loads(re.search(r"jsonpgz\((.*?)\);",r.text).group(1))
+        url=f"http://fundgz.1234567.com.cn/js/{code}.js"
 
-    return float(data["dwjz"])
+        r=requests.get(url,headers=HEADERS,timeout=10)
 
+        match=re.search(r"jsonpgz\((.*?)\);",r.text)
 
-# ==================== 深交所价格 ====================
+        if match:
 
-def get_sz_price(code):
+            data=json.loads(match.group(1))
 
-    r=requests.get(f"http://qt.gtimg.cn/q=sz{code}",headers=HEADERS,timeout=10)
+            dwjz=float(data["dwjz"])
+            gsz=float(data["gsz"])
 
-    return float(r.text.split("~")[3])
+            return dwjz,gsz
 
+    except:
 
-# ==================== 沪交所净值 ====================
+        pass
 
-def get_sh_nav(code):
-
-    url=f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
-
-    r=requests.get(url,headers=HEADERS,timeout=10)
-
-    match=re.search(r"Data_netWorthTrend = (.*?);",r.text)
-
-    data=json.loads(match.group(1))
-
-    t1_nav=float(data[-2]["y"])
-    today_nav=float(data[-1]["y"])
-
-    return t1_nav,today_nav
+    return None,None
 
 
-# ==================== 沪交所价格 ====================
+# ================= 东方财富历史净值 =================
 
-def get_sh_price(code):
+def get_em_nav(code):
 
-    r=requests.get(f"http://qt.gtimg.cn/q=sh{code}",headers=HEADERS,timeout=10)
+    try:
 
-    return float(r.text.split("~")[3])
+        url=f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+
+        r=requests.get(url,headers=HEADERS,timeout=10)
+
+        match=re.search(r"Data_netWorthTrend = (.*?);",r.text)
+
+        data=json.loads(match.group(1))
+
+        t1=float(data[-2]["y"])
+        today=float(data[-1]["y"])
+
+        return t1,today
+
+    except:
+
+        return None,None
 
 
-# ==================== 主程序 ====================
+# ================= 价格 =================
+
+def get_price(code):
+
+    try:
+
+        if code.startswith("5"):
+
+            r=requests.get(f"http://qt.gtimg.cn/q=sh{code}",headers=HEADERS,timeout=10)
+
+        else:
+
+            r=requests.get(f"http://qt.gtimg.cn/q=sz{code}",headers=HEADERS,timeout=10)
+
+        return float(r.text.split("~")[3])
+
+    except:
+
+        return None
+
+
+# ================= 主程序 =================
 
 def run():
 
@@ -113,15 +136,24 @@ def run():
 
         try:
 
-            # =====================================================
-            # 轨道 A：深交所
-            # =====================================================
+            price=get_price(code)
 
-            if not code.startswith("5"):
+            dwjz,gsz=get_estimate_nav(code)
 
-                nav=get_sz_nav(code)
+            # ================= 类型1：QDII LOF =================
+            if gsz and abs(gsz-dwjz)>0.005:
 
-                mp=get_sz_price(code)
+                nav=gsz
+
+                p1=(price-dwjz)/dwjz
+                p2=(price-gsz)/gsz
+
+                print(f"CHECK: {code} {info['name']} -> QDII_LOF  P1:{p1:.2%}, P2:{p2:.2%}")
+
+            # ================= 类型2：普通基金 =================
+            else:
+
+                nav=dwjz
 
                 asset_change=get_market_change(info["ticker"])
 
@@ -133,44 +165,10 @@ def run():
 
                     est_nav=nav*(1+asset_change*info["w"])
 
-                p1=(mp-nav)/nav
-                p2=(mp-est_nav)/est_nav
+                p1=(price-nav)/nav
+                p2=(price-est_nav)/est_nav
 
-                print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
-
-
-            # =====================================================
-            # 轨道 B：沪交所
-            # =====================================================
-
-            else:
-
-                t1_nav,today_nav=get_sh_nav(code)
-
-                if info["nav_mode"]=="t1":
-
-                    nav=t1_nav
-
-                else:
-
-                    nav=today_nav
-
-                mp=get_sh_price(code)
-
-                asset_change=get_market_change(info["ticker"])
-
-                if info["fx"]:
-
-                    est_nav=today_nav*(1+asset_change*info["w"])*(1+fx_change)
-
-                else:
-
-                    est_nav=today_nav*(1+asset_change*info["w"])
-
-                p1=(mp-nav)/nav
-                p2=(mp-est_nav)/est_nav
-
-                print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
+                print(f"CHECK: {code} {info['name']} -> NORMAL  P1:{p1:.2%}, P2:{p2:.2%}")
 
             p_min=min(p1,p2)
             p_max=max(p1,p2)
@@ -191,7 +189,6 @@ def run():
         except Exception as e:
 
             print(f"ERROR: {code} -> {e}")
-
 
     results.sort(key=lambda x:x["p2"],reverse=True)
 
