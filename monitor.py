@@ -1,3 +1,4 @@
+
 import re
 import json
 import requests
@@ -8,19 +9,38 @@ from datetime import datetime
 
 FUND_CONFIG = {
 
-    "161116": {"name":"易基黄金","ticker":"GC=F","w":0.99,"fx":False},
-    "160416": {"name":"石油基金","ticker":"XOP","w":0.82,"fx":True},
+    "161116": {"name":"易基黄金","ticker":"GC=F","w":0.99},
+    "160416": {"name":"石油基金","ticker":"XOP","w":0.82},
 
-    "501225": {"name":"全球芯片","ticker":"SOXX","w":0.88,"fx":True},
-    "501018": {"name":"南方原油LOF","ticker":"CL=F","w":0.95,"fx":False},
+    "501225": {"name":"全球芯片","ticker":"SOXX","w":0.88},
+    "501018": {"name":"南方原油LOF","ticker":"CL=F","w":0.95},
 }
 
-HEADERS = {"User-Agent":"Mozilla/5.0"}
+HEADERS={"User-Agent":"Mozilla/5.0"}
 
-CN_TZ = pytz.timezone("Asia/Shanghai")
+CN_TZ=pytz.timezone("Asia/Shanghai")
 
 
-# ================= 外盘涨跌 =================
+# ================= 通用请求 =================
+
+def safe_get(url):
+
+    try:
+
+        r=requests.get(url,headers=HEADERS,timeout=10)
+
+        if r.status_code==200:
+
+            return r.text
+
+    except:
+
+        pass
+
+    return None
+
+
+# ================= 市场涨跌 =================
 
 def get_market_change(ticker):
 
@@ -49,77 +69,87 @@ def get_fx():
     return get_market_change("CNH=F")
 
 
-# ================= 实时估值接口 =================
+# ================= 天天基金估值 =================
 
-def get_estimate_nav(code):
+def get_fund_estimate(code):
 
-    try:
+    txt=safe_get(f"http://fundgz.1234567.com.cn/js/{code}.js")
 
-        url=f"http://fundgz.1234567.com.cn/js/{code}.js"
+    if not txt:
 
-        r=requests.get(url,headers=HEADERS,timeout=10)
-
-        match=re.search(r"jsonpgz\((.*?)\);",r.text)
-
-        if match:
-
-            data=json.loads(match.group(1))
-
-            dwjz=float(data["dwjz"])
-            gsz=float(data["gsz"])
-
-            return dwjz,gsz
-
-    except:
-
-        pass
-
-    return None,None
-
-
-# ================= 东方财富历史净值 =================
-
-def get_em_nav(code):
+        return None,None
 
     try:
 
-        url=f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+        data=json.loads(re.search(r"jsonpgz\((.*?)\);",txt).group(1))
 
-        r=requests.get(url,headers=HEADERS,timeout=10)
+        dwjz=float(data["dwjz"])
+        gsz=float(data["gsz"])
 
-        match=re.search(r"Data_netWorthTrend = (.*?);",r.text)
-
-        data=json.loads(match.group(1))
-
-        t1=float(data[-2]["y"])
-        today=float(data[-1]["y"])
-
-        return t1,today
+        return dwjz,gsz
 
     except:
 
         return None,None
 
 
-# ================= 价格 =================
+# ================= 东方财富NAV =================
 
-def get_price(code):
+def get_em_nav(code):
+
+    txt=safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
+
+    if not txt:
+
+        return None
 
     try:
 
-        if code.startswith("5"):
+        match=re.search(r"Data_netWorthTrend = (.*?);",txt)
 
-            r=requests.get(f"http://qt.gtimg.cn/q=sh{code}",headers=HEADERS,timeout=10)
+        data=json.loads(match.group(1))
 
-        else:
-
-            r=requests.get(f"http://qt.gtimg.cn/q=sz{code}",headers=HEADERS,timeout=10)
-
-        return float(r.text.split("~")[3])
+        return float(data[-1]["y"])
 
     except:
 
         return None
+
+
+# ================= 实时价格 =================
+
+def get_price(code):
+
+    if code.startswith("5"):
+
+        txt=safe_get(f"http://qt.gtimg.cn/q=sh{code}")
+
+    else:
+
+        txt=safe_get(f"http://qt.gtimg.cn/q=sz{code}")
+
+    if not txt:
+
+        return None
+
+    try:
+
+        return float(txt.split("~")[3])
+
+    except:
+
+        return None
+
+
+# ================= 类型识别 =================
+
+def detect_type(dwjz,gsz):
+
+    if gsz and abs(gsz-dwjz)>0.005:
+
+        return "QDII_LOF"
+
+    return "NORMAL"
 
 
 # ================= 主程序 =================
@@ -138,37 +168,38 @@ def run():
 
             price=get_price(code)
 
-            dwjz,gsz=get_estimate_nav(code)
+            if not price:
 
-            # ================= 类型1：QDII LOF =================
-            if gsz and abs(gsz-dwjz)>0.005:
+                print(f"ERROR price {code}")
+                continue
 
-                nav=gsz
+            dwjz,gsz=get_fund_estimate(code)
 
-                p1=(price-dwjz)/dwjz
-                p2=(price-gsz)/gsz
+            if not dwjz:
 
-                print(f"CHECK: {code} {info['name']} -> QDII_LOF  P1:{p1:.2%}, P2:{p2:.2%}")
+                dwjz=get_em_nav(code)
 
-            # ================= 类型2：普通基金 =================
-            else:
+            if not dwjz:
 
-                nav=dwjz
+                print(f"ERROR nav {code}")
+                continue
 
-                asset_change=get_market_change(info["ticker"])
+            ftype=detect_type(dwjz,gsz)
 
-                if info["fx"]:
+            asset_change=get_market_change(info["ticker"])
 
-                    est_nav=nav*(1+asset_change*info["w"])*(1+fx_change)
+            fx=1+fx_change if info["ticker"]!="GC=F" else 1
 
-                else:
+            est_nav=dwjz*(1+asset_change*info["w"])*fx
 
-                    est_nav=nav*(1+asset_change*info["w"])
+            if ftype=="QDII_LOF" and gsz:
 
-                p1=(price-nav)/nav
-                p2=(price-est_nav)/est_nav
+                est_nav=gsz
 
-                print(f"CHECK: {code} {info['name']} -> NORMAL  P1:{p1:.2%}, P2:{p2:.2%}")
+            p1=(price-dwjz)/dwjz
+            p2=(price-est_nav)/est_nav
+
+            print(f"CHECK {code} {info['name']} {ftype} -> P1:{p1:.2%} P2:{p2:.2%}")
 
             p_min=min(p1,p2)
             p_max=max(p1,p2)
@@ -188,7 +219,7 @@ def run():
 
         except Exception as e:
 
-            print(f"ERROR: {code} -> {e}")
+            print("ERROR",code,e)
 
     results.sort(key=lambda x:x["p2"],reverse=True)
 
