@@ -1,16 +1,17 @@
+import requests
 import re
 import json
-import requests
-import pytz
-from datetime import datetime
+import datetime
+import math
 
-# ================= 基金配置 =================
+HEADERS={
+"User-Agent":"Mozilla/5.0"
+}
 
 # ================= 基金配置 =================
 
 FUND_CONFIG = {
 
-    # ------ 海外与商品 (精准对标) ------
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
     "160416": {"name": "石油基金", "ticker": "IXC", "w": 0.82},
     "161129": {"name": "原油基金", "ticker": "CL=F", "w": 0.95},
@@ -23,7 +24,6 @@ FUND_CONFIG = {
     "161126": {"name": "标普医疗", "ticker": "XLV", "w": 0.98},
     "161226": {"name": "白银基金", "ticker": "SLV", "w": 0.95},
 
-    # ------ 国内 A 股基金 (已取消海外关联) ------
     "501227": {"name": "弘德红利", "ticker": "", "w": 0.90},
     "501099": {"name": "平安新兴", "ticker": "", "w": 0.90},
     "501082": {"name": "科创投资", "ticker": "", "w": 0.85},
@@ -35,15 +35,7 @@ FUND_CONFIG = {
     "501001": {"name": "财通精选", "ticker": "", "w": 0.85},
 }
 
-HEADERS={"User-Agent":"Mozilla/5.0"}
-
-CN_TZ=pytz.timezone("Asia/Shanghai")
-
-# ================= pingzhongdata缓存 =================
-
-PING_CACHE={}
-
-# ================= 安全请求 =================
+# ================= HTTP =================
 
 def safe_get(url):
 
@@ -57,83 +49,48 @@ def safe_get(url):
 
     except:
 
-        pass
+        return None
 
-    return None
+# ================= 实时价格 =================
 
+def get_price(code):
 
-# ================= ping数据缓存 =================
+    url=f"https://push2.eastmoney.com/api/qt/stock/get?secid=1.{code}&fields=f43"
 
-def get_ping_data(code):
-
-    if code in PING_CACHE:
-        return PING_CACHE[code]
-
-    txt=safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
+    txt=safe_get(url)
 
     if not txt:
         return None
 
-    PING_CACHE[code]=txt
+    try:
+
+        data=json.loads(txt)
+
+        return data["data"]["f43"]/1000
+
+    except:
+
+        return None
+
+# ================= NAV =================
+
+PING_CACHE={}
+
+def get_ping_data(code):
+
+    if code in PING_CACHE:
+
+        return PING_CACHE[code]
+
+    txt=safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
+
+    if txt:
+
+        PING_CACHE[code]=txt
 
     return txt
 
-
-# ================= 市场涨跌 =================
-
-def get_market_change(ticker):
-
-    try:
-
-        url=f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
-
-        r=requests.get(url,headers=HEADERS,timeout=10)
-
-        data=r.json()["chart"]["result"][0]["meta"]
-
-        price=data["regularMarketPrice"]
-        prev=data["previousClose"]
-
-        return (price/prev)-1
-
-    except:
-
-        return 0.0
-
-
-# ================= 汇率 =================
-
-def get_fx():
-
-    return get_market_change("CNH=F")
-
-
-# ================= 天天基金估值 =================
-
-def get_fund_estimate(code):
-
-    txt=safe_get(f"http://fundgz.1234567.com.cn/js/{code}.js")
-
-    if not txt:
-        return None,None
-
-    try:
-
-        data=json.loads(re.search(r"jsonpgz\((.*?)\);",txt).group(1))
-
-        dwjz=float(data["dwjz"])
-        gsz=float(data["gsz"])
-
-        return dwjz,gsz
-
-    except:
-
-        return None,None
-
-
-# ================= 东方财富NAV =================
-
-def get_em_nav(code):
+def get_nav(code):
 
     txt=get_ping_data(code)
 
@@ -152,46 +109,9 @@ def get_em_nav(code):
 
         return None
 
+# ================= 申购状态接口1 =================
 
-# ================= 实时价格 =================
-
-def get_price(code):
-
-    if code.startswith("5"):
-        txt=safe_get(f"http://qt.gtimg.cn/q=sh{code}")
-    else:
-        txt=safe_get(f"http://qt.gtimg.cn/q=sz{code}")
-
-    if not txt:
-        return None
-
-    try:
-
-        price=float(txt.split("~")[3])
-
-        if price==0:
-            return None
-
-        return price
-
-    except:
-
-        return None
-
-
-# ================= 类型识别 =================
-
-def detect_type(dwjz,gsz):
-
-    if gsz and abs(gsz-dwjz)>0.005:
-        return "QDII_LOF"
-
-    return "NORMAL"
-
-
-# ================= 申购状态接口 =================
-
-def get_purchase_status(code):
+def purchase_api1(code):
 
     try:
 
@@ -199,217 +119,172 @@ def get_purchase_status(code):
 
         r=requests.get(url,headers=HEADERS,timeout=10)
 
-        data=r.json()
+        j=r.json()
 
-        info=data["Datas"]
+        status=j["Datas"].get("SGZT")
 
-        # 申购状态
-        status=info.get("SGZT","未知")
+        limit=j["Datas"].get("SGJE")
 
-        # 限购额度
-        limit=info.get("SGRQ")
-
-        # 单日限购金额
-        limit_money=info.get("SGJE")
-
-        if limit_money and limit_money!="":
-            try:
-                limit_money=float(limit_money)
-            except:
-                limit_money=None
-        else:
-            limit_money=None
-
-        return status,limit_money
+        return status,limit
 
     except:
 
-        return "未知",None
+        return None,None
 
-# ================= 格式化申购状态 =================
+# ================= 申购状态接口2 (备用) =================
 
-def format_purchase_status(status,limit):
+def purchase_api2(code):
 
-    if status=="暂停申购":
-        return "暂停申购"
+    try:
 
-    if limit:
+        url=f"https://fund.eastmoney.com/{code}.html"
 
-        if limit>=10000:
-            return f"{int(limit/10000)}万元"
-        else:
-            return f"{int(limit)}元"
+        html=safe_get(url)
 
-    return "不限购"
+        if not html:
+            return None,None
 
+        if "暂停申购" in html:
+
+            return "暂停申购",None
+
+        if "限大额" in html:
+
+            return "限购",None
+
+        return "开放",None
+
+    except:
+
+        return None,None
+
+# ================= 获取申购状态 =================
+
+def get_purchase_status(code):
+
+    status,limit=purchase_api1(code)
+
+    if status:
+
+        return status,limit
+
+    status,limit=purchase_api2(code)
+
+    if status:
+
+        return status,limit
+
+    return "未知",None
+
+# ================= 海外资产涨跌 =================
+
+def get_market_change(ticker):
+
+    if ticker=="":
+        return 0
+
+    try:
+
+        url=f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+
+        r=requests.get(url,headers=HEADERS,timeout=10)
+
+        j=r.json()
+
+        close=j["chart"]["result"][0]["meta"]["regularMarketPrice"]
+
+        prev=j["chart"]["result"][0]["meta"]["chartPreviousClose"]
+
+        return (close-prev)/prev
+
+    except:
+
+        return 0
 
 # ================= 主程序 =================
 
-def run():
+results=[]
 
-    now=datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+for code,info in FUND_CONFIG.items():
 
-    fx_change=get_fx()
+    name=info["name"]
+    ticker=info["ticker"]
+    w=info["w"]
 
-    results=[]
+    price=get_price(code)
 
-    for code,info in FUND_CONFIG.items():
+    nav=get_nav(code)
 
-        try:
+    change=get_market_change(ticker)
 
-            price=get_price(code)
+    if price and nav:
 
-            if not price:
+        p1=(price-nav)/nav*100
+        p2=(price-(nav*(1+change*w)))/(nav*(1+change*w))*100
 
-                print(f"SKIP {code} price error")
+    else:
 
-                continue
+        p1=0
+        p2=0
 
-            dwjz,gsz=get_fund_estimate(code)
+    avg=(p1+p2)/2
 
-            if not dwjz:
-                dwjz=get_em_nav(code)
+    # 申购状态
+    status,limit=get_purchase_status(code)
 
-            if not dwjz:
+    print(f"CHECK {code} {name} -> P1:{p1:.2f}% P2:{p2:.2f}% 申购:{status} 限额:{limit}")
 
-                print(f"SKIP {code} nav error")
+    results.append({
 
-                continue
+        "code":code,
+        "name":name,
+        "premium":round(avg,2),
+        "purchase":status
 
-            ftype=detect_type(dwjz,gsz)
+    })
 
-            ticker=info["ticker"]
+# ================= HTML =================
 
-            if ticker:
+results.sort(key=lambda x:x["premium"],reverse=True)
 
-                asset_change=get_market_change(ticker)
+html=""
 
-                fx=1+fx_change if ticker!="GC=F" else 1
+for i in results:
 
-            else:
+    p=i["premium"]
 
-                asset_change=0
-                fx=1
+    if p>5:
 
-            est_nav=dwjz*(1+asset_change*info["w"])*fx
+        color="red"
+        tag="套利"
 
-            if ftype=="QDII_LOF" and gsz:
+    elif p>3:
 
-                est_nav=gsz
+        color="orange"
+        tag="关注"
 
-            p1=(price-dwjz)/dwjz
-            p2=(price-est_nav)/est_nav
+    else:
 
-            print(f"CHECK {code} {info['name']} -> P1:{p1:.2%} P2:{p2:.2%}")
+        color="gray"
+        tag="正常"
 
-            premium=(p1+p2)/2
-
-            if premium >= 0.05:
-                signal = "🔴 套利"
-                color = "strong_arbitrage"
-            elif premium >= 0.03:
-                signal = "🟡 关注"
-                color = "watch"
-            elif premium >= 0:
-                signal = "⚪ 正常"
-                color = "normal"
-            else:
-                signal = "⚫ 折价"
-                color = "discount"
-
-            status,limit=get_purchase_status(code)
-
-            purchase=format_purchase_status(status,limit)
-
-            results.append({
-                "code":code,
-                "name":info["name"],
-                "premium":premium,
-                "signal":signal,
-                "color":color,
-                "purchase":purchase
-            })
-
-        except Exception as e:
-
-            print("ERROR",code,e)
-
-
-    results.sort(key=lambda x:x["premium"],reverse=True)
-
-    rows=""
-
-    for i in results:
-
-        rows+=f'''
-<div class="row">
+    html+=f"""
 <div>
 <b>{i['name']}</b><br>
 {i['code']}<br>
-申购: {i['purchase']}
+申购:{i['purchase']}<br>
+<span style='color:{color};font-size:20px'>{p}%</span> {tag}
 </div>
+<hr>
+"""
 
-<div class="right">
-<div class="premium {i['color']}">{i['premium']:.2%}</div>
-<div class="signal">{i['signal']}</div>
-</div>
-</div>
-'''
-
-    html=f"""
-<!DOCTYPE html>
+page=f"""
 <html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-
-body{{font-family:sans-serif;margin:0;padding:10px;background:#f6f6f6}}
-
-.container{{max-width:480px;margin:auto;background:white;border-radius:10px;overflow:hidden}}
-
-.header{{padding:15px 12px;border-bottom:1px solid #eee}}
-
-.row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee}}
-
-.right{{text-align:right}}
-
-.premium{{font-weight:bold;font-size:16px;margin-bottom:4px}}
-
-.signal{{font-size:14px;color:#666}}
-
-.strong_arbitrage{{color:#cf1322}}
-.watch{{color:#faad14}}
-.normal{{color:#1890ff}}
-.discount{{color:#888}}
-
-</style>
-</head>
-
-<body>
-
-<div class="container">
-
-<div class="header">
-
-<h3 style="margin:0">套利溢价率</h3>
-<p style="margin:5px 0 0;color:#666">更新时间: {now}</p>
-
-</div>
-
-{rows}
-
-</div>
-
-</body>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<h2>套利溢价率</h2>
+更新时间 {datetime.datetime.now()}
+{html}
 </html>
 """
 
-    with open("index.html","w",encoding="utf-8") as f:
-
-        f.write(html)
-
-
-if __name__=="__main__":
-
-    run()
+open("index.html","w",encoding="utf8").write(page)
