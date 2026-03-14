@@ -6,8 +6,11 @@ from datetime import datetime
 
 # ================= 基金配置 =================
 
+# ================= 基金配置 =================
+
 FUND_CONFIG = {
 
+    # ------ 海外与商品 (精准对标) ------
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
     "160416": {"name": "石油基金", "ticker": "IXC", "w": 0.82},
     "161129": {"name": "原油基金", "ticker": "CL=F", "w": 0.95},
@@ -20,27 +23,60 @@ FUND_CONFIG = {
     "161126": {"name": "标普医疗", "ticker": "XLV", "w": 0.98},
     "161226": {"name": "白银基金", "ticker": "SLV", "w": 0.95},
 
+    # ------ 国内 A 股基金 (已取消海外关联) ------
     "501227": {"name": "弘德红利", "ticker": "", "w": 0.90},
     "501099": {"name": "平安新兴", "ticker": "", "w": 0.90},
     "501082": {"name": "科创投资", "ticker": "", "w": 0.85},
+    "501188": {"name": "添富核心", "ticker": "", "w": 0.85},
+    "501076": {"name": "创新动力", "ticker": "", "w": 0.85},
+    "501096": {"name": "国联安科", "ticker": "", "w": 0.85},
+    "501015": {"name": "财通升级", "ticker": "", "w": 0.85},
+    "501022": {"name": "银华鑫盛", "ticker": "", "w": 0.85},
+    "501001": {"name": "财通精选", "ticker": "", "w": 0.85},
 }
 
 HEADERS={"User-Agent":"Mozilla/5.0"}
 
 CN_TZ=pytz.timezone("Asia/Shanghai")
 
+# ================= pingzhongdata缓存 =================
+
+PING_CACHE={}
+
 # ================= 安全请求 =================
 
 def safe_get(url):
 
     try:
+
         r=requests.get(url,headers=HEADERS,timeout=10)
+
         if r.status_code==200:
+
             return r.text
+
     except:
+
         pass
 
     return None
+
+
+# ================= ping数据缓存 =================
+
+def get_ping_data(code):
+
+    if code in PING_CACHE:
+        return PING_CACHE[code]
+
+    txt=safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
+
+    if not txt:
+        return None
+
+    PING_CACHE[code]=txt
+
+    return txt
 
 
 # ================= 市场涨跌 =================
@@ -99,7 +135,7 @@ def get_fund_estimate(code):
 
 def get_em_nav(code):
 
-    txt=safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
+    txt=get_ping_data(code)
 
     if not txt:
         return None
@@ -131,7 +167,12 @@ def get_price(code):
 
     try:
 
-        return float(txt.split("~")[3])
+        price=float(txt.split("~")[3])
+
+        if price==0:
+            return None
+
+        return price
 
     except:
 
@@ -148,44 +189,40 @@ def detect_type(dwjz,gsz):
     return "NORMAL"
 
 
-# ================= 申购状态检测（新增模块） =================
+# ================= 申购状态接口 =================
 
 def get_purchase_status(code):
 
-    txt=safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
-
-    if not txt:
-        return "未知",None
-
     try:
 
-        sgzt=re.search(r'sgzt:"(.*?)"',txt)
-        sgzt=sgzt.group(1) if sgzt else "未知"
+        url=f"https://fundmobapi.eastmoney.com/FundMNewApi/FundBaseTypeInformation?FCODE={code}"
 
-        maxbuy=re.search(r'maxBuy:"(.*?)"',txt)
+        r=requests.get(url,headers=HEADERS,timeout=10)
 
-        if maxbuy:
+        data=r.json()
 
-            value=maxbuy.group(1)
+        info=data["Datas"]["FundBaseTypeInformation"]
 
-            if value=="" or value=="0":
-                limit=None
-            else:
-                limit=float(value)
+        status=info.get("PurchaseStatus","未知")
+        limit=info.get("PurchaseLimit")
 
+        if limit:
+            limit=float(limit)
         else:
             limit=None
 
-        return sgzt,limit
+        return status,limit
 
     except:
 
         return "未知",None
 
 
-def format_purchase_status(sgzt,limit):
+# ================= 格式化申购状态 =================
 
-    if sgzt=="暂停申购":
+def format_purchase_status(status,limit):
+
+    if status=="暂停申购":
         return "暂停申购"
 
     if limit:
@@ -196,20 +233,6 @@ def format_purchase_status(sgzt,limit):
             return f"{int(limit)}元"
 
     return "不限购"
-
-
-# ================= 套利可行性判断 =================
-
-def arbitrage_possible(premium,purchase):
-
-    if purchase=="暂停申购":
-        return "❌ 无法套利"
-
-    if premium>0.03:
-        return "✅ 可套利"
-
-    return "⚪ 正常"
-
 
 
 # ================= 主程序 =================
@@ -229,6 +252,9 @@ def run():
             price=get_price(code)
 
             if not price:
+
+                print(f"SKIP {code} price error")
+
                 continue
 
             dwjz,gsz=get_fund_estimate(code)
@@ -237,6 +263,9 @@ def run():
                 dwjz=get_em_nav(code)
 
             if not dwjz:
+
+                print(f"SKIP {code} nav error")
+
                 continue
 
             ftype=detect_type(dwjz,gsz)
@@ -251,7 +280,7 @@ def run():
 
             else:
 
-                asset_change=0.0
+                asset_change=0
                 fx=1
 
             est_nav=dwjz*(1+asset_change*info["w"])*fx
@@ -263,7 +292,7 @@ def run():
             p1=(price-dwjz)/dwjz
             p2=(price-est_nav)/est_nav
 
-            print(f"CHECK {code} {info['name']} {ftype} -> P1:{p1:.2%} P2:{p2:.2%}")
+            print(f"CHECK {code} {info['name']} -> P1:{p1:.2%} P2:{p2:.2%}")
 
             premium=(p1+p2)/2
 
@@ -280,11 +309,9 @@ def run():
                 signal = "⚫ 折价"
                 color = "discount"
 
-            sgzt,limit=get_purchase_status(code)
+            status,limit=get_purchase_status(code)
 
-            purchase=format_purchase_status(sgzt,limit)
-
-            arb=arbitrage_possible(premium,purchase)
+            purchase=format_purchase_status(status,limit)
 
             results.append({
                 "code":code,
@@ -292,13 +319,13 @@ def run():
                 "premium":premium,
                 "signal":signal,
                 "color":color,
-                "purchase":purchase,
-                "arb":arb
+                "purchase":purchase
             })
 
         except Exception as e:
 
             print("ERROR",code,e)
+
 
     results.sort(key=lambda x:x["premium"],reverse=True)
 
@@ -311,15 +338,12 @@ def run():
 <div>
 <b>{i['name']}</b><br>
 {i['code']}<br>
-{i['purchase']}
+申购: {i['purchase']}
 </div>
 
 <div class="right">
-
 <div class="premium {i['color']}">{i['premium']:.2%}</div>
 <div class="signal">{i['signal']}</div>
-<div class="signal">{i['arb']}</div>
-
 </div>
 </div>
 '''
