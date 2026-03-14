@@ -1,4 +1,3 @@
-
 import re
 import json
 import requests
@@ -220,26 +219,35 @@ def run():
             p2=(price-est_nav)/est_nav
 
             # ===== Debug 输出 =====
-
             print(f"CHECK {code} {info['name']} {ftype} -> P1:{p1:.2%} P2:{p2:.2%}")
 
             # ===== 网页使用平均值 =====
-
             premium=(p1+p2)/2
 
-            color="plus" if premium>0.02 else "minus"
+            # ================= 套利信号灯（新增） =================
+            if premium >= 0.05:
+                signal = "🔴 强套利"
+                color = "strong_arbitrage"
+            elif premium >= 0.03:
+                signal = "🟡 可关注"
+                color = "watch"
+            elif premium >= 0:
+                signal = "⚪ 正常"
+                color = "normal"
+            else:
+                signal = "⚫ 折价"
+                color = "discount"
+            # ======================================================
 
             results.append({
-
                 "code":code,
                 "name":info["name"],
                 "premium":premium,
+                "signal":signal,
                 "color":color
-
             })
 
         except Exception as e:
-
             print("ERROR",code,e)
 
     results.sort(key=lambda x:x["premium"],reverse=True)
@@ -247,12 +255,12 @@ def run():
     rows=""
 
     for i in results:
-
         rows+=f'''
 <div class="row">
-<div><b>{i["name"]}</b><br>{i["code"]}</div>
-<div class="premium {i["color"]}">
-{i["premium"]:.2%}
+<div><b>{i['name']}</b><br>{i['code']}</div>
+<div class="right">
+<div class="premium {i['color']}">{i['premium']:.2%}</div>
+<div class="signal">{i['signal']}</div>
 </div>
 </div>
 '''
@@ -262,33 +270,29 @@ def run():
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-
-body{{font-family:sans-serif}}
-
+body{{font-family:sans-serif;margin:0;padding:10px;background:#f6f6f6}}
+.container{{max-width:480px;margin:auto;background:white;border-radius:10px;overflow:hidden}}
+.header{{padding:15px 12px;border-bottom:1px solid #eee}}
 .row{{display:flex;justify-content:space-between;padding:12px;border-bottom:1px solid #eee}}
-
-.plus{{color:#cf1322;font-weight:bold}}
-
-.minus{{color:#389e0d}}
-
-.premium{{text-align:right}}
-
+.right{{text-align:right}}
+.premium{{font-weight:bold;font-size:16px;margin-bottom:4px}}
+.signal{{font-size:14px;color:#666}}
+.strong_arbitrage{{color:#cf1322}}
+.watch{{color:#faad14}}
+.normal{{color:#1890ff}}
+.discount{{color:#888}}
 </style>
 </head>
-
 <body>
-
-<div style="max-width:480px;margin:auto">
-
-<h3>溢价精算 Alpha</h3>
-
-<p>更新时间: {now}</p>
-
-{rows}
-
+<div class="container">
+<div class="header">
+<h3 style="margin:0">溢价精算 Alpha</h3>
+<p style="margin:5px 0 0;color:#666">更新时间: {now}</p>
 </div>
-
+{rows}
+</div>
 </body>
 </html>
 """
@@ -296,7 +300,5 @@ body{{font-family:sans-serif}}
     with open("index.html","w",encoding="utf-8") as f:
         f.write(html)
 
-
 if __name__=="__main__":
-
     run()
