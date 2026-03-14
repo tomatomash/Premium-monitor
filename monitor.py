@@ -9,11 +9,46 @@ from datetime import datetime
 
 FUND_CONFIG = {
 
-    "161116": {"name":"易基黄金","ticker":"GC=F","w":0.99},
-    "160416": {"name":"石油基金","ticker":"XOP","w":0.82},
+    "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
 
-    "501225": {"name":"全球芯片","ticker":"SOXX","w":0.88},
-    "501018": {"name":"南方原油LOF","ticker":"CL=F","w":0.95},
+    "160416": {"name": "石油基金", "ticker": "XOP", "w": 0.82},
+
+    "161129": {"name": "原油基金", "ticker": "CL=F", "w": 0.95},
+
+    "501018": {"name": "南方原油", "ticker": "CL=F", "w": 0.95},
+
+    "160723": {"name": "嘉实原油", "ticker": "CL=F", "w": 0.90},
+
+    "160644": {"name": "港美互联", "ticker": "KWEB", "w": 0.95},
+
+    "161125": {"name": "标普500", "ticker": "SPY", "w": 0.98},
+
+    "161128": {"name": "标普科技", "ticker": "XLK", "w": 0.98},
+
+    "161116": {"name": "黄金主题", "ticker": "GC=F", "w": 0.99},
+
+    "161126": {"name": "标普医疗", "ticker": "XLV", "w": 0.98},
+
+    "161226": {"name": "白银基金", "ticker": "SLV", "w": 0.95},
+
+    "501227": {"name": "弘德红利", "ticker": "SPY", "w": 0.90},
+
+    "501099": {"name": "平安新兴", "ticker": "QQQ", "w": 0.90},
+
+    "501082": {"name": "科创投资", "ticker": "QQQ", "w": 0.85},
+
+    "501188": {"name": "添富核心", "ticker": "SPY", "w": 0.85},
+
+    "501076": {"name": "创新动力", "ticker": "QQQ", "w": 0.85},
+
+    "501096": {"name": "国联安科", "ticker": "QQQ", "w": 0.85},
+
+    "501015": {"name": "财通升级", "ticker": "QQQ", "w": 0.85},
+
+    "501022": {"name": "银华鑫盛", "ticker": "QQQ", "w": 0.85},
+
+    "501001": {"name": "财通精选", "ticker": "QQQ", "w": 0.85},
+
 }
 
 HEADERS={"User-Agent":"Mozilla/5.0"}
