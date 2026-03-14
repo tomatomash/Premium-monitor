@@ -120,82 +120,111 @@ def detect_type(dwjz,gsz):
         return "QDII_LOF"
     return "NORMAL"
 
-# ================= 【独立模块 - 主数据源】东方财富官方API =================
+# ================= 【独立模块 - 主数据源】东方财富基金详情页 =================
 def get_purchase_status_primary(code):
     """
-    主数据源：东方财富官方移动端API，直接返回结构化的申购赎回数据
+    主数据源：东方财富基金详情页，从交易信息区提取申购状态和限购额度
     返回: (状态字符串, 限购额度元)
     """
     try:
-        url = f"https://fundmobapi.eastmoney.com/FundMApi/FundPurchaseSaleInformation.ashx?FCODE={code}"
+        url = f"https://fund.eastmoney.com/{code}.html"
         txt = safe_get(url)
         if not txt:
             return "主源接口失败", None
-        
-        data = json.loads(txt)
-        if data.get("ErrCode") != 0:
-            return "主源数据异常", None
-        
-        info = data.get("Datas", {})
+
         status = "开放申购"
         limit = None
-        
-        # 解析申购状态
-        purchase_status = info.get("PurchaseStatus", "")
-        if purchase_status == "暂停申购":
-            status = "暂停申购"
-        elif purchase_status == "限制申购":
-            status = "限制申购"
-        
-        # 解析单日申购限额（单位：元）
-        single_limit = info.get("SingleDayPurchaseLimit", "")
-        if single_limit and single_limit != "0":
-            try:
-                limit = float(single_limit)
-            except:
-                pass
-        
+
+        # 1. 优先从"交易信息"表格提取
+        trade_info_pattern = r'<th>申购状态</th>\s*<td>(.*?)</td>.*?<th>申购限额</th>\s*<td>(.*?)</td>'
+        trade_match = re.search(trade_info_pattern, txt, re.DOTALL)
+        if trade_match:
+            status_text = trade_match.group(1).strip()
+            limit_text = trade_match.group(2).strip()
+
+            if "暂停" in status_text:
+                status = "暂停申购"
+            elif "限制" in status_text or "限购" in status_text:
+                status = "限制申购"
+
+            if limit_text and limit_text != "无" and limit_text != "不限":
+                limit_match = re.search(r'(\d+(?:\.\d+)?)(?:万元|元)', limit_text)
+                if limit_match:
+                    limit = float(limit_match.group(1))
+                    if "万元" in limit_text:
+                        limit *= 10000
+
+        # 2. 如果表格没找到，从页面文本中搜索
+        if limit is None:
+            limit_patterns = [
+                r'单日申购限额.*?[:：]\s*([\d,.]+)(?:万元|元)',
+                r'单个账户单日累计申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)',
+                r'申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)'
+            ]
+            for pattern in limit_patterns:
+                limit_match = re.search(pattern, txt)
+                if limit_match:
+                    limit_str = limit_match.group(1).replace(',', '').strip()
+                    limit = float(limit_str)
+                    if "万元" in limit_match.group(0):
+                        limit *= 10000
+                    break
+
         return status, limit
     except Exception as e:
         print(f"⚠️  主源异常 {code}: {str(e)}")
         return "主源异常", None
 
-# ================= 【独立模块 - 备选数据源】天天基金网官方API =================
+# ================= 【独立模块 - 备选数据源】新浪财经基金页 =================
 def get_purchase_status_backup(code):
     """
-    备选数据源：天天基金网官方API，返回基金档案的结构化数据
+    备选数据源：新浪财经基金页，从基金档案区提取申购状态和限购额度
     返回: (状态字符串, 限购额度元)
     """
     try:
-        url = f"https://fund.1234567.com.cn/data/1234567/f10/jjda/{code}.js"
+        url = f"https://finance.sina.com.cn/fund/{code}.shtml"
         txt = safe_get(url)
         if not txt:
             return "备源接口失败", None
-        
-        # 解析JSONP格式
-        jsonp_match = re.search(r"jQuery\d+_\d+\((.*?)\);", txt)
-        if not jsonp_match:
-            return "备源解析失败", None
-        
-        data = json.loads(jsonp_match.group(1))
-        info = data.get("fundInfo", {})
+
         status = "开放申购"
         limit = None
-        
-        # 解析申购状态
-        if info.get("sgzt") == "暂停申购":
-            status = "暂停申购"
-        elif info.get("sgzt") == "限制申购":
-            status = "限制申购"
-        
-        # 解析单日申购限额（单位：元）
-        single_limit = info.get("drsgxe", "")
-        if single_limit and single_limit != "0":
-            try:
-                limit = float(single_limit)
-            except:
-                pass
-        
+
+        # 1. 从"基金档案"表格提取
+        archive_pattern = r'<td>申购状态</td>\s*<td>(.*?)</td>.*?<td>申购限额</td>\s*<td>(.*?)</td>'
+        archive_match = re.search(archive_pattern, txt, re.DOTALL)
+        if archive_match:
+            status_text = archive_match.group(1).strip()
+            limit_text = archive_match.group(2).strip()
+
+            if "暂停" in status_text:
+                status = "暂停申购"
+            elif "限制" in status_text or "限购" in status_text:
+                status = "限制申购"
+
+            if limit_text and limit_text != "无" and limit_text != "不限":
+                limit_match = re.search(r'(\d+(?:\.\d+)?)(?:万元|元)', limit_text)
+                if limit_match:
+                    limit = float(limit_match.group(1))
+                    if "万元" in limit_text:
+                        limit *= 10000
+
+        # 2. 如果表格没找到，从页面文本中搜索
+        if limit is None:
+            limit_patterns = [
+                r'单日申购限额.*?[:：]\s*([\d,.]+)(?:万元|元)',
+                r'单个账户单日累计申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)',
+                r'申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)'
+            ]
+            for pattern in limit_patterns:
+                limit_match = re.search(pattern, txt)
+                if limit_match:
+                    limit_str = limit_match.group(1).replace(',', '').strip()
+                    limit = float(limit_str)
+                    if "万元" in limit_match.group(0):
+                        limit *= 10000
+                    break
+
         return status, limit
     except Exception as e:
         print(f"⚠️  备源异常 {code}: {str(e)}")
