@@ -120,51 +120,101 @@ def detect_type(dwjz,gsz):
         return "QDII_LOF"
     return "NORMAL"
 
-# ================= 【独立模块】申购状态接口（天天基金网稳定源） =================
-def get_purchase_status(code):
+# ================= 【独立模块 - 主数据源】东方财富基金详情页 =================
+def get_purchase_status_primary(code):
     """
-    独立封装的申购状态获取函数，返回 (状态字符串, 限购额度元)
-    不影响任何其他模块逻辑
+    主数据源：东方财富基金详情页，解析申购状态和限购信息
+    返回: (状态字符串, 限购额度元)
     """
     try:
-        # 天天基金网基金公告接口，包含最新申购状态和限购信息
-        url = f"https://fund.1234567.com.cn/data/1234567/f10/jjgg/{code}.js"
+        url = f"https://fund.eastmoney.com/{code}.html"
         txt = safe_get(url)
         if not txt:
-            return "接口失败", None
-        
-        # 解析JSONP格式
-        jsonp_match = re.search(r"jQuery\d+_\d+\((.*?)\);", txt)
-        if not jsonp_match:
-            return "解析失败", None
-        
-        data = json.loads(jsonp_match.group(1))
-        
+            return "主源接口失败", None
+
         status = "开放申购"
         limit = None
-        
-        # 遍历公告，找到最新的申购相关公告
-        for item in data.get("Data", []):
-            title = item.get("title", "").strip()
-            if "暂停申购" in title:
-                status = "暂停申购"
+
+        # 解析申购状态
+        if "暂停申购" in txt:
+            status = "暂停申购"
+        elif "限制申购" in txt or "限购" in txt:
+            status = "限制申购"
+
+        # 解析限购额度
+        limit_patterns = [
+            r'单日申购限额.*?[:：]\s*([\d,.]+)(?:万元|元)',
+            r'单个账户单日累计申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)',
+            r'申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)'
+        ]
+
+        for pattern in limit_patterns:
+            limit_match = re.search(pattern, txt)
+            if limit_match:
+                limit_str = limit_match.group(1).replace(',', '').strip()
+                limit = float(limit_str)
+                if "万元" in limit_match.group(0):
+                    limit *= 10000  # 转换为元
                 break
-            elif "限制申购" in title or "限购" in title:
-                status = "限制申购"
-                # 提取限购金额，单位元
-                limit_match = re.search(r'(\d+(?:\.\d+)?)(?:万元|元)', title)
-                if limit_match:
-                    num = float(limit_match.group(1))
-                    if "万元" in title:
-                        limit = num * 10000  # 转换为元
-                    else:
-                        limit = num
-                break
-        
+
         return status, limit
     except Exception as e:
-        print(f"⚠️  获取申购状态异常 {code}: {str(e)}")
-        return "异常", None
+        print(f"⚠️  主源异常 {code}: {str(e)}")
+        return "主源异常", None
+
+# ================= 【独立模块 - 备选数据源】天天基金网基金档案页 =================
+def get_purchase_status_backup(code):
+    """
+    备选数据源：天天基金网基金档案页，解析申购状态和限购信息
+    返回: (状态字符串, 限购额度元)
+    """
+    try:
+        url = f"https://fund.1234567.com.cn/f10/jjda/{code}.html"
+        txt = safe_get(url)
+        if not txt:
+            return "备源接口失败", None
+
+        status = "开放申购"
+        limit = None
+
+        # 解析申购状态
+        if "暂停申购" in txt:
+            status = "暂停申购"
+        elif "限制申购" in txt or "限购" in txt:
+            status = "限制申购"
+
+        # 解析限购额度
+        limit_patterns = [
+            r'单日申购限额.*?[:：]\s*([\d,.]+)(?:万元|元)',
+            r'单个账户单日累计申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)',
+            r'申购上限.*?[:：]\s*([\d,.]+)(?:万元|元)'
+        ]
+
+        for pattern in limit_patterns:
+            limit_match = re.search(pattern, txt)
+            if limit_match:
+                limit_str = limit_match.group(1).replace(',', '').strip()
+                limit = float(limit_str)
+                if "万元" in limit_match.group(0):
+                    limit *= 10000  # 转换为元
+                break
+
+        return status, limit
+    except Exception as e:
+        print(f"⚠️  备源异常 {code}: {str(e)}")
+        return "备源异常", None
+
+# ================= 【统一入口】申购状态获取（主备切换） =================
+def get_purchase_status(code):
+    """
+    统一入口函数，优先使用主数据源，失败则自动切换到备选数据源
+    返回: (状态字符串, 限购额度元)
+    """
+    status, limit = get_purchase_status_primary(code)
+    if "失败" in status or "异常" in status:
+        print(f"🔄  主源失败，切换到备源 {code}")
+        status, limit = get_purchase_status_backup(code)
+    return status, limit
 
 # ================= 格式化申购状态（原逻辑完全不动） =================
 def format_purchase_status(status,limit):
