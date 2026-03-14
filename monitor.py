@@ -3,9 +3,11 @@ import json
 import requests
 import pytz
 from datetime import datetime
+import os  # 新增，用于调试文件写入
 
 # ================= 调试开关 =================
-DEBUG = True  # 设为 True 打印详细日志，False 只打印关键信息
+DEBUG = True
+SAVE_DEBUG_FILES = True  # 设为 True 将 pingzhongdata 保存到文件，便于分析
 
 # ================= 基金配置 =================
 FUND_CONFIG = {
@@ -73,6 +75,18 @@ def get_ping_data(code):
     if not txt:
         return None
     PING_CACHE[code] = txt
+
+    # 调试：保存到文件
+    if SAVE_DEBUG_FILES:
+        try:
+            with open(f"debug_{code}.js", "w", encoding="utf-8") as f:
+                f.write(txt)
+            if DEBUG:
+                print(f"  💾 已保存 debug_{code}.js")
+        except Exception as e:
+            if DEBUG:
+                print(f"  保存调试文件失败: {e}")
+
     return txt
 
 # ================= 市场涨跌 =================
@@ -97,7 +111,6 @@ def get_fund_estimate(code):
     if not txt:
         return None, None
     try:
-        # 去除 jsonpgz() 包裹
         json_str = re.search(r"jsonpgz\((.*)\);?", txt).group(1)
         data = json.loads(json_str)
         dwjz = float(data["dwjz"])
@@ -129,7 +142,6 @@ def get_price(code):
     if not txt:
         return None
     try:
-        # 腾讯股票接口格式：v_sh501225="1~全球芯片LOF~501225~2.345~..."
         price = float(txt.split("~")[3])
         if price == 0:
             return None
@@ -143,11 +155,10 @@ def detect_type(dwjz, gsz):
         return "QDII_LOF"
     return "NORMAL"
 
-# ================= 【修复核心】主数据源：天天基金 pingzhongdata =================
+# ================= 【增强版】主数据源：天天基金 pingzhongdata =================
 def get_purchase_status_primary(code):
     """
-    主数据源：天天基金 pingzhongdata.js (最稳定，已成功获取)
-    从文件中提取申购状态和限购额度
+    增强版解析：先找变量，再搜中文文本
     """
     try:
         txt = get_ping_data(code)
@@ -156,53 +167,92 @@ def get_purchase_status_primary(code):
                 print("  pingzhongdata: 无响应")
             return "主源接口失败", None
 
-        # --- 提取申购状态 ---
-        status = "开放申购"  # 默认
-        # 常见状态变量名：fS_purchaseStatus, fS_purchaseStatusName, fS_redemptionStatus 等
-        # 方法1: 查找 purchaseStatusName 或类似字段
+        # ---------- 1. 解析状态 ----------
+        status = "开放申购"
+        # 优先找状态名称变量
         status_match = re.search(r'var\s+fS_purchaseStatusName\s*=\s*["\']([^"\']+)["\']', txt)
-        if not status_match:
-            status_match = re.search(r'var\s+fS_purchaseStatus\s*=\s*["\']([^"\']+)["\']', txt)
-        if not status_match:
-            # 兜底：在文本中查找关键词
-            if "暂停申购" in txt:
-                status = "暂停申购"
-            elif "限购" in txt or "限制申购" in txt:
-                status = "限制申购"
-            else:
-                status = "开放申购"
-        else:
+        if status_match:
             status_raw = status_match.group(1)
+        else:
+            # 尝试找状态代码变量（可能为数字，需映射）
+            status_code_match = re.search(r'var\s+fS_purchaseStatus\s*=\s*["\']?(\d)["\']?', txt)
+            if status_code_match:
+                code_num = status_code_match.group(1)
+                # 常见映射：0-开放，1-暂停，2-限制，但不确定，故暂时忽略
+                status_raw = ""
+            else:
+                status_raw = ""
+
+        if status_raw:
             if "暂停" in status_raw:
                 status = "暂停申购"
             elif "限购" in status_raw or "限制" in status_raw:
                 status = "限制申购"
             else:
                 status = "开放申购"
+        else:
+            # 若变量未找到，直接全文搜索关键词
+            if "暂停申购" in txt:
+                status = "暂停申购"
+            elif "限购" in txt or "限制申购" in txt:
+                status = "限制申购"
+            # 否则保持默认开放
 
-        # --- 提取限购额度 ---
+        # ---------- 2. 解析限购额度 ----------
         limit = None
-        # 常见限购变量名：fS_minBuyAmount, fS_purchaseLimit, fS_singlePurchaseLimit
-        # 优先查找限购金额（单位可能是元）
-        limit_match = re.search(r'var\s+fS_singlePurchaseLimit\s*=\s*["\']?([\d,.]+)["\']?', txt)
-        if not limit_match:
-            limit_match = re.search(r'var\s+fS_purchaseLimit\s*=\s*["\']?([\d,.]+)["\']?', txt)
-        if not limit_match:
-            limit_match = re.search(r'var\s+fS_minBuyAmount\s*=\s*["\']?([\d,.]+)["\']?', txt)
-        
-        if limit_match:
-            limit_str = limit_match.group(1).replace(',', '')
-            try:
-                limit = float(limit_str)
-                # 通常限购金额以元为单位，但如果数值很小（如1.0），可能是万元，需结合上下文判断
-                # 这里简单处理：如果 limit < 100 且 存在 "万" 字，则乘以10000
-                if limit < 100 and "万" in txt[limit_match.start()-10:limit_match.end()+10]:
-                    limit *= 10000
-            except:
-                pass
+
+        # 2.1 从常见变量名中提取
+        limit_var_patterns = [
+            r'var\s+fS_singlePurchaseLimit\s*=\s*["\']?([\d,.]+)["\']?',
+            r'var\s+fS_purchaseLimit\s*=\s*["\']?([\d,.]+)["\']?',
+            r'var\s+fS_limitAmount\s*=\s*["\']?([\d,.]+)["\']?',
+            r'var\s+fS_maxPurchase\s*=\s*["\']?([\d,.]+)["\']?',
+            r'var\s+fS_minBuyAmount\s*=\s*["\']?([\d,.]+)["\']?',  # 注意这是最低金额，不是限购
+        ]
+        for pattern in limit_var_patterns:
+            match = re.search(pattern, txt)
+            if match:
+                limit_str = match.group(1).replace(',', '')
+                try:
+                    limit = float(limit_str)
+                    # 如果数值很小（如1.0）且附近有“万”字，可能是万元
+                    if limit < 100 and "万" in txt[match.start()-20:match.end()+20]:
+                        limit *= 10000
+                    if DEBUG:
+                        print(f"  从变量 {pattern} 提取到限购: {limit}")
+                    break
+                except:
+                    pass
+
+        # 2.2 如果变量没找到，尝试搜索中文文本
+        if limit is None:
+            # 常见中文限购描述
+            chinese_patterns = [
+                r'单日限购[：:]\s*([\d,.]+)\s*元',
+                r'单日申购上限[：:]\s*([\d,.]+)\s*元',
+                r'限购金额[：:]\s*([\d,.]+)\s*元',
+                r'申购上限[：:]\s*([\d,.]+)\s*元',
+                r'限制申购金额[：:]\s*([\d,.]+)\s*元',
+                r'单日累计申购上限[：:]\s*([\d,.]+)\s*元',
+                r'单个账户单日累计申购上限[：:]\s*([\d,.]+)\s*元',
+            ]
+            for pattern in chinese_patterns:
+                match = re.search(pattern, txt)
+                if match:
+                    limit_str = match.group(1).replace(',', '')
+                    try:
+                        limit = float(limit_str)
+                        # 如果附近有“万”字（但中文已指定元，所以很少见）
+                        if "万" in txt[match.start()-10:match.end()+10]:
+                            limit *= 10000
+                        if DEBUG:
+                            print(f"  从中文文本提取到限购: {limit}")
+                        break
+                    except:
+                        pass
 
         if DEBUG:
-            print(f"  pingzhongdata 解析结果: 状态={status}, 限购={limit}元")
+            print(f"  pingzhongdata 最终解析: 状态={status}, 限购={limit}元")
         return status, limit
 
     except Exception as e:
@@ -218,16 +268,16 @@ def get_purchase_status_backup_gz(code):
     """
     try:
         txt = safe_get(f"http://fundgz.1234567.com.cn/js/{code}.js")
-        if not txt:
+        if not txt or txt == "jsonpgz();":
             if DEBUG:
-                print("  fundgz: 无响应")
+                print("  fundgz: 无数据或空响应")
             return "备源接口失败", None
 
         json_str = re.search(r"jsonpgz\((.*)\);?", txt).group(1)
         data = json.loads(json_str)
         
-        # 尝试获取状态字段（字段名可能为 fundStatus、applyStatus 等）
-        status_raw = data.get("fundStatus", "") or data.get("applyStatus", "") or ""
+        # 尝试获取状态字段
+        status_raw = data.get("fundStatus") or data.get("applyStatus") or ""
         if status_raw:
             if "暂停" in status_raw:
                 status = "暂停申购"
@@ -236,10 +286,10 @@ def get_purchase_status_backup_gz(code):
             else:
                 status = "开放申购"
         else:
-            status = "开放申购"  # 无字段时默认开放
+            status = "开放申购"
 
-        # 限购额度（字段名可能为 purchaseLimit、limitAmount 等）
-        limit_raw = data.get("purchaseLimit", "") or data.get("limitAmount", "") or ""
+        # 限购额度
+        limit_raw = data.get("purchaseLimit") or data.get("limitAmount") or ""
         limit = None
         if limit_raw and "不限" not in limit_raw:
             match = re.search(r"(\d+(?:\.\d+)?)", str(limit_raw).replace(',', ''))
@@ -259,9 +309,7 @@ def get_purchase_status_backup_gz(code):
 
 # ================= 备选数据源2：和讯基金 =================
 def get_purchase_status_backup_hexun(code):
-    """
-    备选数据源：和讯基金（页面解析）
-    """
+    """和讯基金（页面解析）"""
     try:
         url = f"https://funds.hexun.com/{code}.shtml"
         txt = safe_get(url)
@@ -300,9 +348,7 @@ def get_purchase_status_backup_hexun(code):
 
 # ================= 备选数据源3：金融界基金 =================
 def get_purchase_status_backup_jrj(code):
-    """
-    备选数据源：金融界基金（页面解析）
-    """
+    """金融界基金（页面解析）"""
     try:
         url = f"https://fund.jrj.com.cn/{code}.shtml"
         txt = safe_get(url)
@@ -344,7 +390,6 @@ def get_purchase_status(code):
     """
     统一入口：主源(pingzhongdata) -> 备源1(fundgz) -> 备源2(和讯) -> 备源3(金融界)
     """
-    # 主源
     status, limit = get_purchase_status_primary(code)
     if "失败" not in status and "异常" not in status:
         return status, limit
