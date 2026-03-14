@@ -32,10 +32,10 @@ def run():
             # 轨道 A：深市 (16/15等) - 物理封箱，绝对不动
             # =========================================================
             if not code.startswith('5'):
-                # 净值：天天基金接口（深市专用）
+                # 净值：天天基金HTTP接口（深市专用，HTTP更稳）
                 nav_res = requests.get(f"http://fundgz.1234567.com.cn/js/{code}.js", headers=HEADERS, timeout=5)
                 nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', nav_res.text).group(1))['dwjz'])
-                # 价格：腾讯行情（深市专用）
+                # 价格：腾讯HTTP行情（深市专用）
                 p_res = requests.get(f"http://qt.gtimg.cn/q=sz{code}", headers=HEADERS, timeout=5)
                 mp = float(p_res.text.split('~')[3])
                 # 计算
@@ -44,43 +44,40 @@ def run():
                 p1, p2 = (mp - nav) / nav, (mp - est_nav) / est_nav
 
             # =========================================================
-            # 轨道 B：沪市 (5开头) - 绝对分离，纯文本网页抓取
+            # 轨道 B：沪市 (5开头) - 绝对分离，全用HTTP源
             # =========================================================
             else:
                 nav = None
-                # 尝试1：东方财富基金详情页（纯文本正则，避开JSON）
+                # 尝试1：天天基金HTTP接口（沪市专用，优先HTTP）
                 try:
-                    url = f"https://fund.eastmoney.com/{code}.html"
+                    url = f"http://fundgz.1234567.com.cn/js/{code}.js"
                     res = requests.get(url, headers=HEADERS, timeout=10)
-                    # 匹配 "单位净值：1.0234元" 这种纯文本格式
-                    match = re.search(r'单位净值.*?([0-9]+\.[0-9]+)元', res.text, re.DOTALL)
-                    if match:
-                        nav = float(match.group(1))
-                        print(f"【沪市净值成功】{code} -> 东方财富网页: {nav}")
+                    nav = float(json.loads(re.search(r'jsonpgz\((.*?)\);', res.text).group(1))['dwjz'])
+                    print(f"【沪市净值成功】{code} -> 天天基金HTTP: {nav}")
                 except Exception as e:
                     print(f"【沪市净值失败1】{code}: {e}")
 
-                # 尝试2：金融界基金页（纯文本正则）
+                # 尝试2：新浪财经HTTP接口（沪市专用，HTTP）
                 if nav is None:
                     try:
-                        url = f"https://fund.jrj.com.cn/{code}.shtml"
+                        url = f"http://hq.sinajs.cn/list=fu_{code}"
                         res = requests.get(url, headers=HEADERS, timeout=10)
-                        match = re.search(r'单位净值.*?([0-9]+\.[0-9]+)元', res.text, re.DOTALL)
+                        match = re.search(r'="[^,]+,([0-9.]+),', res.text)
                         if match:
                             nav = float(match.group(1))
-                            print(f"【沪市净值成功】{code} -> 金融界网页: {nav}")
+                            print(f"【沪市净值成功】{code} -> 新浪HTTP: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败2】{code}: {e}")
 
-                # 尝试3：同花顺基金页（纯文本正则）
+                # 尝试3：腾讯财经HTTP接口（沪市专用，HTTP）
                 if nav is None:
                     try:
-                        url = f"https://fund.10jqka.com/{code}.html"
+                        url = f"http://qt.gtimg.cn/q=fu{code}"
                         res = requests.get(url, headers=HEADERS, timeout=10)
-                        match = re.search(r'单位净值.*?([0-9]+\.[0-9]+)元', res.text, re.DOTALL)
+                        match = re.search(r'^[^_]+_([0-9.]+)', res.text)
                         if match:
                             nav = float(match.group(1))
-                            print(f"【沪市净值成功】{code} -> 同花顺网页: {nav}")
+                            print(f"【沪市净值成功】{code} -> 腾讯HTTP: {nav}")
                     except Exception as e:
                         print(f"【沪市净值失败3】{code}: {e}")
 
@@ -88,7 +85,7 @@ def run():
                 if nav is None:
                     raise ValueError(f"无法获取{code}的净值，跳过计算")
 
-                # 价格：沪市专用腾讯行情
+                # 价格：沪市专用腾讯HTTP行情
                 p_res = requests.get(f"http://qt.gtimg.cn/q=sh{code}", headers=HEADERS, timeout=5)
                 mp = float(p_res.text.split('~')[3])
                 print(f"【沪市价格】{code} -> {mp}")
@@ -106,13 +103,16 @@ def run():
             color = "plus" if p2 > 0.02 else "minus"
             results.append({
                 "code": code, "name": info["name"],
-                "p_min": p_min, "p_max": p_max, "color": color
+                "p_min": p_min, "p_max": p_max, "p2": p2, "color": color
             })
             print(f"CHECK: {code} {info['name']} -> P1:{p1:.2%}, P2:{p2:.2%}")
 
         except Exception as e:
             print(f"ERROR: {code} 计算出错: {e}")
             continue  # 出错就跳过，不影响其他基金
+
+    # 按溢价率从大到小排序（按P2排序）
+    results.sort(key=lambda x: x['p2'], reverse=True)
 
     # 生成网页（显示时自动排序）
     rows = "".join([f'<div class="row"><div><b>{i["name"]}</b><br>{i["code"]}</div><div class="premium {i["color"]}">{i["p_min"]:.2%} ~ {i["p_max"]:.2%}</div></div>' for i in results])
