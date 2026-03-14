@@ -125,69 +125,54 @@ def detect_type(dwjz, gsz):
         return "QDII_LOF"
     return "NORMAL"
 
-# ================= 【优化】主数据源：天天基金网 =================
+# ================= 【优化】主数据源：腾讯财经API（稳定） =================
 def get_purchase_status_primary(code):
     """
-    主数据源：天天基金网（稳定），从基金详情页提取申购状态和限购额度
+    主数据源：腾讯财经基金基础信息接口（返回JSON，无需解析HTML）
     返回: (状态字符串, 限购额度元)
     """
     try:
-        url = f"https://fund.eastmoney.com/{code}.html"
+        url = f"http://web.ifzq.gtimg.cn/fund/newfund/fund_base/getFundBase?app=web&fundid={code}"
         txt = safe_get(url)
         if not txt:
             return "主源接口失败", None
 
-        status = "开放申购"
-        limit = None
+        data = json.loads(txt)
+        if data.get("code") != 0:
+            return "主源数据异常", None
 
-        # 提取申购状态（优先从“交易状态”标签中获取）
-        status_match = re.search(r'交易状态[：:]\s*</label>\s*<span[^>]*>\s*([^<]+?)\s*</span>', txt)
-        if not status_match:
-            status_match = re.search(r'交易状态[：:]\s*([^<]+?)(?:<|\\n)', txt)
-        if status_match:
-            status_text = status_match.group(1).strip()
-            if "暂停申购" in status_text:
-                status = "暂停申购"
-            elif "限购" in status_text or "限制" in status_text:
-                status = "限制申购"
-            else:
-                status = "开放申购"
+        fund_base = data.get("data", {}).get("fund_base", {})
+        status_raw = fund_base.get("funde_buy_status", "").strip()
+        limit_raw = fund_base.get("funde_buy_limit", "").strip()
+
+        # 状态解析
+        if "暂停" in status_raw:
+            status = "暂停申购"
+        elif "限购" in status_raw or "限制" in status_raw:
+            status = "限制申购"
         else:
-            # 兜底匹配
-            if "暂停申购" in txt:
-                status = "暂停申购"
-            elif "限购" in txt or "限制申购" in txt:
-                status = "限制申购"
+            status = "开放申购"
 
-        # 提取限购额度（支持多种常见格式）
-        limit_patterns = [
-            r'单日累计申购上限[：:]\s*<em>([\d,.]+)</em>\s*元',
-            r'单日累计申购上限[：:]\s*([\d,.]+)\s*元',
-            r'单日限购[：:]\s*([\d,.]+)\s*元',
-            r'申购上限[：:]\s*([\d,.]+)\s*元',
-            r'限制申购金额[：:]\s*([\d,.]+)\s*元',
-            r'限购[：:]\s*([\d,.]+)\s*万元',
-            r'限购[：:]\s*([\d,.]+)\s*元'
-        ]
-        for pattern in limit_patterns:
-            limit_match = re.search(pattern, txt)
-            if limit_match:
-                limit_str = limit_match.group(1).replace(',', '').strip()
-                limit = float(limit_str)
-                if "万元" in limit_match.group(0):
+        # 限购解析
+        limit = None
+        if limit_raw and "不限" not in limit_raw:
+            # 提取数字（支持小数点）
+            match = re.search(r"(\d+(?:\.\d+)?)", limit_raw.replace(',', ''))
+            if match:
+                limit = float(match.group(1))
+                # 如果单位包含“万”，需转换
+                if "万" in limit_raw:
                     limit *= 10000
-                break
-
         return status, limit
+
     except Exception as e:
-        print(f"⚠️  天天基金主源异常 {code}: {str(e)}")
+        print(f"⚠️  腾讯财经主源异常 {code}: {str(e)}")
         return "主源异常", None
 
-# ================= 【独立模块 - 备选数据源】和讯基金（非主流平台） =================
+# ================= 【独立模块 - 备选数据源】和讯基金 =================
 def get_purchase_status_backup_hexun(code):
     """
-    备选数据源1：和讯基金，从基金详情页提取申购状态和限购额度
-    （保留原有实现，未修改）
+    备选数据源1：和讯基金（页面解析）
     """
     try:
         url = f"https://funds.hexun.com/{code}.shtml"
@@ -222,11 +207,10 @@ def get_purchase_status_backup_hexun(code):
         print(f"⚠️  和讯备源异常 {code}: {str(e)}")
         return "和讯异常", None
 
-# ================= 【独立模块 - 备选数据源】金融界基金（非主流平台） =================
+# ================= 【独立模块 - 备选数据源】金融界基金 =================
 def get_purchase_status_backup_jrj(code):
     """
-    备选数据源2：金融界基金，从基金详情页提取申购状态和限购额度
-    （保留原有实现，未修改）
+    备选数据源2：金融界基金（页面解析）
     """
     try:
         url = f"https://fund.jrj.com.cn/{code}.shtml"
@@ -264,7 +248,7 @@ def get_purchase_status_backup_jrj(code):
 # ================= 【统一入口】申购状态获取（主备切换） =================
 def get_purchase_status(code):
     """
-    统一入口函数，优先使用主数据源（天天基金），失败则依次尝试备选源
+    统一入口函数，优先使用主数据源（腾讯API），失败则依次尝试备选源
     返回: (状态字符串, 限购额度元)
     """
     status, limit = get_purchase_status_primary(code)
