@@ -4,6 +4,9 @@ import requests
 import pytz
 from datetime import datetime
 
+# ================= 调试开关 =================
+DEBUG = True  # 设为 True 打印详细日志，False 只打印关键信息
+
 # ================= 基金配置 =================
 FUND_CONFIG = {
     # ------ 海外与商品 (精准对标) ------
@@ -43,13 +46,23 @@ CN_TZ = pytz.timezone("Asia/Shanghai")
 PING_CACHE = {}
 
 # ================= 安全请求 =================
-def safe_get(url):
+def safe_get(url, headers=None):
+    if headers is None:
+        headers = HEADERS
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
+        if DEBUG:
+            print(f"🔍 请求 URL: {url}")
+        r = requests.get(url, headers=headers, timeout=10)
+        if DEBUG:
+            print(f"  响应状态码: {r.status_code}")
+            if r.status_code == 200:
+                preview = r.text[:200].replace('\n', ' ').replace('\r', '')
+                print(f"  响应预览: {preview}...")
         if r.status_code == 200:
             return r.text
-    except:
-        pass
+    except Exception as e:
+        if DEBUG:
+            print(f"  请求异常: {str(e)}")
     return None
 
 # ================= ping数据缓存 =================
@@ -125,25 +138,31 @@ def detect_type(dwjz, gsz):
         return "QDII_LOF"
     return "NORMAL"
 
-# ================= 【优化】主数据源：腾讯财经API（稳定） =================
+# ================= 主数据源：腾讯财经API =================
 def get_purchase_status_primary(code):
     """
-    主数据源：腾讯财经基金基础信息接口（返回JSON，无需解析HTML）
-    返回: (状态字符串, 限购额度元)
+    主数据源：腾讯财经基金基础信息接口
     """
     try:
         url = f"http://web.ifzq.gtimg.cn/fund/newfund/fund_base/getFundBase?app=web&fundid={code}"
         txt = safe_get(url)
         if not txt:
+            if DEBUG:
+                print("  腾讯API: 无响应")
             return "主源接口失败", None
 
         data = json.loads(txt)
         if data.get("code") != 0:
+            if DEBUG:
+                print(f"  腾讯API: 返回code不为0 -> {data.get('msg')}")
             return "主源数据异常", None
 
         fund_base = data.get("data", {}).get("fund_base", {})
         status_raw = fund_base.get("funde_buy_status", "").strip()
         limit_raw = fund_base.get("funde_buy_limit", "").strip()
+
+        if DEBUG:
+            print(f"  腾讯API 原始状态: '{status_raw}', 原始限购: '{limit_raw}'")
 
         # 状态解析
         if "暂停" in status_raw:
@@ -156,28 +175,82 @@ def get_purchase_status_primary(code):
         # 限购解析
         limit = None
         if limit_raw and "不限" not in limit_raw:
-            # 提取数字（支持小数点）
             match = re.search(r"(\d+(?:\.\d+)?)", limit_raw.replace(',', ''))
             if match:
                 limit = float(match.group(1))
-                # 如果单位包含“万”，需转换
                 if "万" in limit_raw:
                     limit *= 10000
+        if DEBUG:
+            print(f"  腾讯API 解析结果: 状态={status}, 限购={limit}元")
         return status, limit
 
     except Exception as e:
-        print(f"⚠️  腾讯财经主源异常 {code}: {str(e)}")
+        if DEBUG:
+            print(f"  腾讯API 异常: {str(e)}")
         return "主源异常", None
 
-# ================= 【独立模块 - 备选数据源】和讯基金 =================
+# ================= 备选数据源1：新浪财经基金接口 =================
+def get_purchase_status_backup_sina(code):
+    """
+    备选数据源：新浪财经基金接口（返回JSON）
+    """
+    try:
+        url = f"https://stock.finance.sina.com.cn/fundInfo/api/openapi/v1/FundBuyInfo/{code}"
+        txt = safe_get(url, headers={"User-Agent": HEADERS["User-Agent"]})
+        if not txt:
+            if DEBUG:
+                print("  新浪API: 无响应")
+            return "新浪接口失败", None
+
+        data = json.loads(txt)
+        if data.get("result") is None or data.get("result", {}).get("status") != "0":
+            if DEBUG:
+                print(f"  新浪API: 返回数据异常 -> {data.get('msg')}")
+            return "新浪数据异常", None
+
+        result = data["result"]
+        # 状态字段：buy_status_tips 包含文本，如“开放申购”、“限购”等
+        status_raw = result.get("buy_status_tips", "").strip()
+        # 限购字段：single_purchase_limit 格式如 "1.00元" 或 "不限"
+        limit_raw = result.get("single_purchase_limit", "").strip()
+
+        if DEBUG:
+            print(f"  新浪API 原始状态: '{status_raw}', 原始限购: '{limit_raw}'")
+
+        if "暂停" in status_raw:
+            status = "暂停申购"
+        elif "限购" in status_raw or "限制" in status_raw:
+            status = "限制申购"
+        else:
+            status = "开放申购"
+
+        limit = None
+        if limit_raw and "不限" not in limit_raw:
+            match = re.search(r"(\d+(?:\.\d+)?)", limit_raw.replace(',', ''))
+            if match:
+                limit = float(match.group(1))
+                if "万" in limit_raw:
+                    limit *= 10000
+        if DEBUG:
+            print(f"  新浪API 解析结果: 状态={status}, 限购={limit}元")
+        return status, limit
+
+    except Exception as e:
+        if DEBUG:
+            print(f"  新浪API 异常: {str(e)}")
+        return "新浪异常", None
+
+# ================= 备选数据源2：和讯基金 =================
 def get_purchase_status_backup_hexun(code):
     """
-    备选数据源1：和讯基金（页面解析）
+    备选数据源：和讯基金（页面解析）
     """
     try:
         url = f"https://funds.hexun.com/{code}.shtml"
         txt = safe_get(url)
         if not txt:
+            if DEBUG:
+                print("  和讯: 无响应")
             return "和讯接口失败", None
 
         status = "开放申购"
@@ -202,20 +275,25 @@ def get_purchase_status_backup_hexun(code):
                     limit *= 10000
                 break
 
+        if DEBUG:
+            print(f"  和讯解析结果: 状态={status}, 限购={limit}元")
         return status, limit
     except Exception as e:
-        print(f"⚠️  和讯备源异常 {code}: {str(e)}")
+        if DEBUG:
+            print(f"  和讯异常: {str(e)}")
         return "和讯异常", None
 
-# ================= 【独立模块 - 备选数据源】金融界基金 =================
+# ================= 备选数据源3：金融界基金 =================
 def get_purchase_status_backup_jrj(code):
     """
-    备选数据源2：金融界基金（页面解析）
+    备选数据源：金融界基金（页面解析）
     """
     try:
         url = f"https://fund.jrj.com.cn/{code}.shtml"
         txt = safe_get(url)
         if not txt:
+            if DEBUG:
+                print("  金融界: 无响应")
             return "金融界接口失败", None
 
         status = "开放申购"
@@ -240,27 +318,36 @@ def get_purchase_status_backup_jrj(code):
                     limit *= 10000
                 break
 
+        if DEBUG:
+            print(f"  金融界解析结果: 状态={status}, 限购={limit}元")
         return status, limit
     except Exception as e:
-        print(f"⚠️  金融界备源异常 {code}: {str(e)}")
+        if DEBUG:
+            print(f"  金融界异常: {str(e)}")
         return "金融界异常", None
 
-# ================= 【统一入口】申购状态获取（主备切换） =================
+# ================= 【统一入口】申购状态获取（多源切换） =================
 def get_purchase_status(code):
     """
-    统一入口函数，优先使用主数据源（腾讯API），失败则依次尝试备选源
-    返回: (状态字符串, 限购额度元)
+    统一入口：主源(腾讯) -> 备源1(新浪) -> 备源2(和讯) -> 备源3(金融界)
     """
+    # 主源
     status, limit = get_purchase_status_primary(code)
-    if "失败" in status or "异常" in status:
-        print(f"🔄  主源失败，切换到和讯备源 {code}")
-        status, limit = get_purchase_status_backup_hexun(code)
-        if "失败" in status or "异常" in status:
-            print(f"🔄  和讯备源失败，切换到金融界备源 {code}")
-            status, limit = get_purchase_status_backup_jrj(code)
+    if "失败" not in status and "异常" not in status:
+        return status, limit
+    print(f"🔄  主源失败 ({status})，切换到新浪备源 {code}")
+    status, limit = get_purchase_status_backup_sina(code)
+    if "失败" not in status and "异常" not in status:
+        return status, limit
+    print(f"🔄  新浪备源失败 ({status})，切换到和讯备源 {code}")
+    status, limit = get_purchase_status_backup_hexun(code)
+    if "失败" not in status and "异常" not in status:
+        return status, limit
+    print(f"🔄  和讯备源失败 ({status})，切换到金融界备源 {code}")
+    status, limit = get_purchase_status_backup_jrj(code)
     return status, limit
 
-# ================= 格式化申购状态（原逻辑完全不动） =================
+# ================= 格式化申购状态 =================
 def format_purchase_status(status, limit):
     if status == "暂停申购":
         return "暂停申购"
@@ -271,7 +358,7 @@ def format_purchase_status(status, limit):
             return f"{int(limit)}元"
     return "不限购"
 
-# ================= 主程序（仅添加申购状态打印，核心逻辑完全不变） =================
+# ================= 主程序 =================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
     fx_change = get_fx()
