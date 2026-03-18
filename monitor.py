@@ -2,10 +2,18 @@ import re
 import json
 import requests
 import pytz
-from datetime import datetime
+import pandas as pd
+import akshare as ak
+import os
+import time
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 
-# ================= 基金配置 =================
+# ==============================================================================
+# ====== 1. 基金配置区间 (FUND CONFIGURATION) ======
+# 说明：此区间定义监控的基金列表，包含代码、名称、对标 ticker 及权重 w。
+#       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。
+# ==============================================================================
 FUND_CONFIG = {
     # ------ 海外与商品 (精准对标) ------
     "501225": {"name": "全球芯片", "ticker": "SOXX", "w": 0.88},
@@ -19,11 +27,12 @@ FUND_CONFIG = {
     "161116": {"name": "黄金主题", "ticker": "GC=F", "w": 0.99},
     "161126": {"name": "标普医疗", "ticker": "XLV", "w": 0.98},
     "161226": {"name": "白银基金", "ticker": "SLV", "w": 0.95},
+    # 新增基金
     "161130": {"name": "纳指100", "ticker": "QQQ", "w": 0.95},
     "162411": {"name": "华宝油气", "ticker": "XOP", "w": 0.90},
     "163208": {"name": "全球油气", "ticker": "XOP", "w": 0.90},
 
-    # ------ 国内 A 股基金 (已取消海外关联) ------
+    # ------ 国内 A 股基金 ------
     "501227": {"name": "弘德红利", "ticker": "", "w": 0.90},
     "501099": {"name": "平安新兴", "ticker": "", "w": 0.90},
     "501082": {"name": "科创投资", "ticker": "", "w": 0.85},
@@ -35,17 +44,28 @@ FUND_CONFIG = {
     "501001": {"name": "财通精选", "ticker": "", "w": 0.85},
 }
 
+# ==============================================================================
+# ====== 2. 手动修正区间 (MANUAL OVERRIDES) ======
+# 说明：当 akShare 返回数据滞后时，在此强制覆盖申购状态或金额。
+#       格式：{"基金代码": {"申购状态": "xxx", "日累计限定金额": 数值或字符串}}
+# ==============================================================================
+MANUAL_OVERRIDES = {
+    # 示例（需根据实际情况填写）：
+    # "501225": {"申购状态": "暂停申购", "日累计限定金额": 0},
+}
+
+# ==============================================================================
+# ====== 3. 公用工具函数 ======
+# ==============================================================================
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
 }
 CN_TZ = pytz.timezone("Asia/Shanghai")
+PING_CACHE = {}  # 用于缓存 pingzhongdata.js 的内容
 
-# ================= pingzhongdata缓存 =================
-PING_CACHE = {}
-
-# ================= 安全请求 =================
 def safe_get(url):
+    """安全发起 GET 请求，返回文本或 None"""
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
         if r.status_code == 200:
@@ -54,42 +74,132 @@ def safe_get(url):
         pass
     return None
 
-# ================= 爬取 GitHub Pages 限购数据 =================
-def fetch_purchase_limits():
-    """解析 GitHub Pages 中的表格数据"""
-    url = "https://tomatomash.github.io/fund-monitor-report/"
-    html = safe_get(url)
-    limit_map = {}
-    if not html:
-        return limit_map
-
+# ==============================================================================
+# ====== 4. 限购信息模块 (原 fund_monitor_custom限购监控报告.py) ======
+# ==============================================================================
+def get_fund_data():
+    """获取基金申购状态原始数据（akshare）并初步清洗"""
+    print("--- 正在连接 akshare 获取基础数据 ---")
     try:
-        soup = BeautifulSoup(html, 'html.parser')
-        # 查找所有表格行 (Pandas 生成的 HTML 会有 tr 标签)
-        rows = soup.find_all('tr')
-        for row in rows:
-            cols = row.find_all('td')
-            if len(cols) >= 4:
-                # 根据你提供的生成代码：0:代码, 1:基金名称, 2:当前状态, 3:单日限额(元)
-                code = cols[0].get_text(strip=True)
-                status = cols[2].get_text(strip=True)
-                amount = cols[3].get_text(strip=True)
-                
-                # 统一显示格式
-                if "暂停" in status:
-                    display_text = "暂停申购, -"
-                elif "不限额" in amount:
-                    display_text = "开放申购, 不限额"
-                else:
-                    display_text = f"{status}, {amount}元"
-                
-                limit_map[code] = display_text
+        df = ak.fund_purchase_em()
+        
+        # 兼容处理列名（防止接口变动导致找不到限额列）
+        limit_col_map = ['日累计限定金额', '日累计限额', '日限额']
+        for col in limit_col_map:
+            if col in df.columns:
+                df = df.rename(columns={col: '日累计限定金额'})
+                break
+        
+        target_codes = list(FUND_CONFIG.keys())  # 使用主配置的所有基金代码
+        df = df[df['基金代码'].isin(target_codes)].copy()
+        
+        print(f"数据获取成功: 匹配到 {len(df)} 支基金")
+        return df
     except Exception as e:
-        print(f"Fetch limit page error: {e}")
-    return limit_map
+        print(f"错误: 抓取失败: {e}")
+        return pd.DataFrame()
 
-# ================= ping数据缓存 =================
+def apply_manual_overrides(df):
+    """应用手动修正逻辑"""
+    if df.empty:
+        return df
+    
+    for code, override in MANUAL_OVERRIDES.items():
+        mask = df['基金代码'] == code
+        if mask.any():
+            idx = df[mask].index[0]
+            if '申购状态' in override:
+                df.at[idx, '申购状态'] = override['申购状态']
+            if '日累计限定金额' in override:
+                df.at[idx, '日累计限定金额'] = override['日累计限定金额']
+    return df
+
+def format_display_logic(row):
+    """根据业务逻辑格式化显示状态和金额"""
+    status = row['申购状态']
+    amount = row['日累计限定金额']
+    
+    if status == "暂停申购":
+        return "暂停申购", "-"
+    
+    # 阈值判断：极大数据或空值视为不限额
+    if pd.isna(amount) or amount is None or amount >= 1e10:
+        return "开放申购", "不限额"
+    
+    # 金额格式化（去除.0）
+    amount_str = f"{int(amount):,}" if isinstance(amount, (int, float)) and amount % 1 == 0 else str(amount)
+    return "限额申购", amount_str
+
+def get_purchase_limits_dict():
+    """
+    获取限购信息字典，供主程序调用。
+    返回格式：{code: "申购状态, 限额字符串"}，例如 "开放申购, 不限额" 或 "限额申购, 1,000" 或 "暂停申购, -"
+    """
+    df = get_fund_data()
+    if df.empty:
+        return {}
+    
+    df = apply_manual_overrides(df)
+    # 添加基金名称列（便于调试，但不用于输出）
+    df['基金名称'] = df['基金代码'].map(lambda c: FUND_CONFIG.get(c, {}).get('name', ''))
+    
+    limit_dict = {}
+    for _, row in df.iterrows():
+        code = row['基金代码']
+        status, amount_str = format_display_logic(row)
+        limit_dict[code] = f"{status}, {amount_str}"
+    
+    return limit_dict
+
+# ==============================================================================
+# ====== 5. 交易方式判断模块 (原 mode_monitor 场内场外和拖拉机判断.py) ======
+# ==============================================================================
+def fund_type_judge(code):
+    """
+    根据基金代码前缀判断交易方式/类型。
+    返回：
+        "场内_账户限购(可拖拉机)"
+        "场内_身份证限购"
+        "场内交易"
+        "场外申购"
+    """
+    if code.startswith("50"):
+        return "场内_身份证限购"
+    elif code.startswith("16"):
+        return "场内_账户限购(可拖拉机)"
+    elif code.startswith("15"):
+        return "场内交易"
+    elif code.startswith(("51", "58")):
+        return "场内交易"
+    else:
+        return "场外申购"
+
+# 如果需要公告增强，可取消注释以下函数（但当前未使用，因为限购状态已由akshare提供）
+# def fetch_notice_text(code):
+#     try:
+#         url = f"https://fundf10.eastmoney.com/jjgg_{code}.html"
+#         r = requests.get(url, timeout=5)
+#         if r.status_code == 200:
+#             return r.text[:2000]
+#     except:
+#         pass
+#     return ""
+
+# def enhance_judge(code, base_result):
+#     text = fetch_notice_text(code)
+#     if not text:
+#         return base_result
+#     if "单个投资者" in text or "每个账户" in text:
+#         return "场内_身份证限购（公告识别）"
+#     if "暂停申购" in text:
+#         return "暂停申购"
+#     return base_result
+
+# ==============================================================================
+# ====== 6. 溢价率计算核心模块 (原 monitor溢价率计算.py) ======
+# ==============================================================================
 def get_ping_data(code):
+    """获取并缓存 pingzhongdata.js 内容"""
     if code in PING_CACHE:
         return PING_CACHE[code]
     txt = safe_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js")
@@ -98,8 +208,8 @@ def get_ping_data(code):
     PING_CACHE[code] = txt
     return txt
 
-# ================= 市场涨跌 =================
 def get_market_change(ticker):
+    """获取标的资产涨跌幅（Yahoo Finance）"""
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
         r = requests.get(url, headers=HEADERS, timeout=10)
@@ -108,14 +218,15 @@ def get_market_change(ticker):
     except:
         return 0.0
 
-# ================= 汇率 =================
 def get_fx():
+    """获取离岸人民币汇率涨跌幅"""
     return get_market_change("CNH=F")
 
-# ================= 天天基金估值 =================
 def get_fund_estimate(code):
+    """获取天天基金实时估值和昨日净值"""
     txt = safe_get(f"http://fundgz.1234567.com.cn/js/{code}.js")
-    if not txt: return None, None
+    if not txt:
+        return None, None
     try:
         json_str = re.search(r"jsonpgz\((.*)\);?", txt).group(1)
         data = json.loads(json_str)
@@ -123,106 +234,59 @@ def get_fund_estimate(code):
     except:
         return None, None
 
-# ================= 东方财富NAV =================
 def get_em_nav(code):
+    """从东方财富 pingzhongdata 获取最新净值"""
     txt = get_ping_data(code)
-    if not txt: return None
+    if not txt:
+        return None
     try:
         match = re.search(r"Data_netWorthTrend = (.*?);", txt)
         return float(json.loads(match.group(1))[-1]["y"])
     except:
         return None
 
-# ================= 实时价格 =================
 def get_price(code):
+    """获取基金实时价格（腾讯接口）"""
     prefix = "sh" if code.startswith("5") else "sz"
     txt = safe_get(f"http://qt.gtimg.cn/q={prefix}{code}")
-    if not txt: return None
+    if not txt:
+        return None
     try:
         price = float(txt.split("~")[3])
         return price if price != 0 else None
     except:
         return None
 
-# ================= 类型识别 =================
 def detect_type(dwjz, gsz):
+    """判断基金类型：若存在估值且与昨日净值差异明显，则为 QDII_LOF，否则为普通"""
     if gsz and abs(gsz - dwjz) > 0.005:
         return "QDII_LOF"
     return "NORMAL"
 
-# ================= 主程序 =================
-def run():
-    now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    fx_change = get_fx()
-    
-    # 核心：获取限购爬取数据
-    limits = fetch_purchase_limits()
-    
-    results = []
-    for code, info in FUND_CONFIG.items():
-        try:
-            price = get_price(code)
-            if not price: continue
-
-            dwjz, gsz = get_fund_estimate(code)
-            if not dwjz: dwjz = get_em_nav(code)
-            if not dwjz: continue
-
-            ftype = detect_type(dwjz, gsz)
-            ticker = info["ticker"]
-
-            if ticker:
-                asset_change = get_market_change(ticker)
-                fx = 1 + fx_change if ticker != "GC=F" else 1
-            else:
-                asset_change, fx = 0, 1
-
-            est_nav = dwjz * (1 + asset_change * info["w"]) * fx
-            if ftype == "QDII_LOF" and gsz: est_nav = gsz
-
-            p1, p2 = (price - dwjz) / dwjz, (price - est_nav) / est_nav
-            premium = (p1 + p2) / 2
-
-            # 信号处理
-            if premium >= 0.05: signal, color = "🔴 套利", "strong_arbitrage"
-            elif premium >= 0.03: signal, color = "🟡 关注", "watch"
-            elif premium >= 0: signal, color = "⚪ 正常", "normal"
-            else: signal, color = "⚫ 折价", "discount"
-
-            results.append({
-                "code": code,
-                "name": info["name"],
-                "premium": premium,
-                "signal": signal,
-                "color": color,
-                "limit": limits.get(code, "未知状态, -")
-            })
-        except Exception as e:
-            print(f"ERROR {code}: {str(e)}")
-
-    # 排序
-    results.sort(key=lambda x: x["premium"], reverse=True)
-
-    # HTML 生成逻辑（针对你的需求进行布局优化）
+# ==============================================================================
+# ====== 7. HTML 报告生成 ======
+# ==============================================================================
+def generate_html(results, report_time):
+    """生成包含溢价、限购、交易方式的移动端友好 HTML"""
     rows = ""
-    for i in results:
+    for item in results:
         rows += f'''
 <div class="row">
     <div>
-        <b style="font-size:15px; color:#333;">{i['name']}</b><br>
-        <span style="color:#999; font-size:12px;">{i['code']}</span>
+        <b style="font-size:15px; color:#333;">{item['name']}</b><br>
+        <span style="color:#999; font-size:12px;">{item['code']}</span>
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium {i['color']}">{i['premium']:.2%}</span>
-            <span class="signal-tag">{i['signal']}</span>
+            <span class="premium {item['color']}">{item['premium']:.2%}</span>
+            <span class="signal-tag">{item['signal']}</span>
         </div>
-        <div class="limit_info">{i['limit']}</div>
+        <div class="limit_info">{item['limit']}</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">{item['trade_type']}</div>
     </div>
 </div>'''
 
-    html = f"""
-<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -234,9 +298,10 @@ def run():
     .row {{ display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f9f9f9; }}
     .right {{ text-align: right; }}
     .premium_line {{ display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 4px; }}
-    .premium {{ font-weight: 900; font-size: 20px; }} /* 溢价率数值加粗 */
+    .premium {{ font-weight: 900; font-size: 20px; }}
     .signal-tag {{ font-size: 13px; margin-left: 6px; color: #666; }}
-    .limit_info {{ font-size: 12px; color: #888; margin-top: 2px; }} /* 限购信息置于下方 */
+    .limit_info {{ font-size: 12px; color: #888; margin-top: 2px; }}
+    .trade_type {{ font-size: 11px; color: #aaa; }}
     .strong_arbitrage {{ color: #e63946; }}
     .watch {{ color: #f4a261; }}
     .normal {{ color: #2a9d8f; }}
@@ -247,7 +312,7 @@ def run():
     <div class="container">
         <div class="header">
             <h3 style="margin:0; font-size:18px;">实时溢价与限购监控</h3>
-            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: {now}</p>
+            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: {report_time}</p>
         </div>
         {rows}
     </div>
@@ -256,6 +321,93 @@ def run():
 
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
+    print("--- 报告生成成功: index.html (含限购/交易方式) ---")
+
+# ==============================================================================
+# ====== 8. 主程序入口 ======
+# ==============================================================================
+def run():
+    now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    print(f"基金监控系统 v3.0 启动... {now}")
+    
+    # 获取限购信息字典
+    print("正在获取限购数据...")
+    limits = get_purchase_limits_dict()
+    
+    # 获取汇率变化
+    fx_change = get_fx()
+    
+    results = []
+    for code, info in FUND_CONFIG.items():
+        try:
+            # 获取实时价格
+            price = get_price(code)
+            if not price:
+                print(f"警告: {code} 无法获取实时价格，跳过")
+                continue
+
+            # 获取净值及估值
+            dwjz, gsz = get_fund_estimate(code)
+            if not dwjz:
+                dwjz = get_em_nav(code)
+            if not dwjz:
+                print(f"警告: {code} 无法获取净值，跳过")
+                continue
+
+            ftype = detect_type(dwjz, gsz)
+            ticker = info["ticker"]
+
+            if ticker:
+                asset_change = get_market_change(ticker)
+                fx = 1 + fx_change if ticker != "GC=F" else 1
+            else:
+                asset_change, fx = 0, 1
+
+            # 估算净值
+            est_nav = dwjz * (1 + asset_change * info["w"]) * fx
+            if ftype == "QDII_LOF" and gsz:
+                est_nav = gsz
+
+            # 计算溢价率（简单平均）
+            p1 = (price - dwjz) / dwjz if dwjz else 0
+            p2 = (price - est_nav) / est_nav if est_nav else 0
+            premium = (p1 + p2) / 2
+
+            # 信号处理
+            if premium >= 0.05:
+                signal, color = "🔴 套利", "strong_arbitrage"
+            elif premium >= 0.03:
+                signal, color = "🟡 关注", "watch"
+            elif premium >= 0:
+                signal, color = "⚪ 正常", "normal"
+            else:
+                signal, color = "⚫ 折价", "discount"
+
+            # 获取限购信息（默认显示未知）
+            limit_info = limits.get(code, "未知状态, -")
+            
+            # 获取交易方式
+            trade_type = fund_type_judge(code)
+
+            results.append({
+                "code": code,
+                "name": info["name"],
+                "premium": premium,
+                "signal": signal,
+                "color": color,
+                "limit": limit_info,
+                "trade_type": trade_type
+            })
+        except Exception as e:
+            print(f"错误 {code}: {str(e)}")
+            continue
+
+    # 按溢价率降序排序
+    results.sort(key=lambda x: x["premium"], reverse=True)
+
+    # 生成 HTML
+    generate_html(results, now)
+    print("任务执行完毕。")
 
 if __name__ == "__main__":
     run()
