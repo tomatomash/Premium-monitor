@@ -367,8 +367,8 @@ def generate_html(results, report_time):
 
         # 今日关注基本条件：溢价率>3% 且 状态不是暂停申购 且 有限额（不是不限额）
         if premium > 0.03 and status_part != "暂停申购" and amount_desc != "不限额":
-            # 额外条件：如果是开放申购，且限额>10000，则放入暂无机会
-            if status_part == "开放申购" and limit_value is not None and limit_value > 10000:
+            # 额外条件：如果限额数值存在且 > 10000，则放入暂无机会（无论状态是开放申购还是限额申购）
+            if limit_value is not None and limit_value > 10000:
                 other_list.append(item)
             else:
                 focus_list.append(item)
@@ -410,7 +410,7 @@ def generate_html(results, report_time):
     .header {{ padding: 15px; border-bottom: 1px solid #eee; background: #fff; }}
     .section {{ padding: 10px 15px; background: #f9f9fc; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #555; }}
     /* 为第二个板块增加上边距，视觉区分更明显 */
-    .section + .section {{ margin-top: 15px; }}
+    .section + .section {{ margin-top: 25px; }}
     .row {{ display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f0f0f0; }}
     .right {{ text-align: right; }}
     .premium_line {{ display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 4px; }}
@@ -450,7 +450,7 @@ def generate_html(results, report_time):
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.4 启动... {now}")
+    print(f"基金监控系统 v3.5 启动... {now}")
 
     # 运行频率控制
     if not should_run():
