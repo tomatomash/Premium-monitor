@@ -7,16 +7,31 @@
     body { font-family: -apple-system, sans-serif; background: #f4f4f7; margin: 0; padding: 15px; }
     .container { max-width: 500px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; }
     .header { padding: 15px; border-bottom: 1px solid #eee; background: #fff; }
-    .section { padding: 10px 15px; background: #f9f9fc; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #555; }
-    /* 为第二个板块增加上边距，视觉区分更明显 */
-    .section + .section { margin-top: 25px; }
+    .section-title { padding: 12px 15px; background: #f9f9fc; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #555; display: flex; align-items: center; }
+    
+    /* 暂无机会板块样式：通过 filter 实现全局变灰调低对比度 */
+    .muted-section { 
+        margin-top: 30px; 
+        border-top: 1px solid #eee;
+        /* --- 调色说明：修改下面的 grayscale(60%) 为 0% 即可恢复原色 --- */
+        filter: grayscale(60%) opacity(0.7); 
+        background: #fafafa;
+    }
+    
+    /* 折叠栏样式 */
+    details summary { cursor: pointer; outline: none; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    .summary-box { display: flex; justify-content: space-between; width: 100%; align-items: center; }
+    .arrow { border: solid #999; border-width: 0 2px 2px 0; display: inline-block; padding: 3px; transform: rotate(45deg); transition: transform 0.2s; }
+    details[open] .arrow { transform: rotate(-135deg); }
+
     .row { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f0f0f0; }
     .right { text-align: right; }
     .premium_line { display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 4px; }
     .premium { font-weight: 900; font-size: 20px; }
     .signal-tag { font-size: 13px; margin-left: 6px; color: #666; }
     .limit_info { font-size: 12px; color: #888; margin-top: 2px; }
-    .trade_type { font-size: 11px; color: #aaa; }
+    .trade_type { font-size: 11px; color: #aaa; margin-top: 2px; }
     .strong_arbitrage { color: #e63946; }
     .watch { color: #f4a261; }
     .normal { color: #2a9d8f; }
@@ -28,14 +43,20 @@
     <div class="container">
         <div class="header">
             <h3 style="margin:0; font-size:18px;">实时溢价与限购监控</h3>
-            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: 2026-03-18 15:41:43</p>
+            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: 2026-03-18 16:07:48</p>
         </div>
 
-        <div class="section">今日关注</div>
+        <div class="section-title">今日关注</div>
         <div class="empty">暂无满足条件的基金</div>
 
-        <div class="section">暂无机会</div>
-        
+        <details class="muted-section">
+            <summary class="section-title">
+                <div class="summary-box">
+                    <span>暂无机会</span>
+                    <i class="arrow"></i>
+                </div>
+            </summary>
+            
 <div class="row">
     <div>
         <b style="font-size:15px; color:#333;">白银基金</b><br>
@@ -47,7 +68,7 @@
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -57,11 +78,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">17.58%</span>
+            <span class="premium strong_arbitrage">17.47%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -71,11 +92,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">17.43%</span>
+            <span class="premium strong_arbitrage">17.33%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -85,11 +106,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">17.05%</span>
+            <span class="premium strong_arbitrage">16.93%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -103,7 +124,7 @@
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -117,7 +138,7 @@
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -131,7 +152,7 @@
             <span class="signal-tag">🟡 关注</span>
         </div>
         <div class="limit_info">限额申购, 100,000</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -145,7 +166,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">限额申购, 10</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -159,7 +180,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -173,7 +194,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -187,7 +208,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -201,7 +222,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -215,7 +236,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -229,7 +250,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">限额申购, 10</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -243,7 +264,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -257,7 +278,7 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">限额申购, 10</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -267,11 +288,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium normal">0.43%</span>
+            <span class="premium normal">0.42%</span>
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">限额申购, 500,000</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -285,7 +306,21 @@
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">黄金主题</b><br>
+        <span style="color:#999; font-size:12px;">161116</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium discount">-0.41%</span>
+            <span class="signal-tag">⚫ 折价</span>
+        </div>
+        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -299,21 +334,7 @@
             <span class="signal-tag">⚫ 折价</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">黄金主题</b><br>
-        <span style="color:#999; font-size:12px;">161116</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.55%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -327,7 +348,7 @@
             <span class="signal-tag">⚫ 折价</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+        <div class="trade_type">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -341,7 +362,7 @@
             <span class="signal-tag">⚫ 折价</span>
         </div>
         <div class="limit_info">限额申购, 10</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -355,9 +376,10 @@
             <span class="signal-tag">⚫ 折价</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+        <div class="trade_type">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
+        </details>
     </div>
 </body>
 </html>
