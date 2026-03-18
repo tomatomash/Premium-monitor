@@ -321,7 +321,7 @@ def generate_html(results, report_time):
 <body>
     <div class="container">
         <div class="header">
-            <h3 style="margin:0; font-size:18px;">实时溢价与限购监控</h3>
+            <h3 style="margin:0; font-size:18px;">Premium Monitor</h3>
             <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: {report_time}</p>
         </div>
 
@@ -372,7 +372,7 @@ def run():
             p1 = (price - dwjz) / dwjz if dwjz else 0
             p2 = (price - est_nav) / est_nav if est_nav else 0
             premium = (p1 + p2) / 2
-            if premium >= 0.05: signal, color = "🔴 套利", "strong_arbitrage"
+            if premium >= 0.05: signal, color = "🔴 尝试", "strong_arbitrage"
             elif premium >= 0.03: signal, color = "🟡 关注", "watch"
             elif premium >= 0: signal, color = "⚪ 正常", "normal"
             else: signal, color = "⚫ 折价", "discount"
