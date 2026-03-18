@@ -339,8 +339,22 @@ def update_last_run():
         f.write(now)
 
 # ==============================================================================
-# ====== 8. HTML 报告生成（分板块） ======
+# ====== 8. HTML 报告生成（分板块，加强视觉区分） ======
 # ==============================================================================
+def parse_limit_info(limit_str):
+    """从 "状态, 金额描述" 解析出状态和限额数值（如果存在）"""
+    if ', ' in limit_str:
+        status_part, amount_desc = limit_str.split(', ', 1)
+    else:
+        status_part, amount_desc = limit_str, ""
+    # 从金额描述中提取数字（忽略逗号）
+    digits = re.findall(r'\d+', amount_desc.replace(',', ''))
+    if digits:
+        limit_value = int(''.join(digits))
+    else:
+        limit_value = None
+    return status_part, amount_desc, limit_value
+
 def generate_html(results, report_time):
     """生成包含溢价、限购、交易方式的移动端友好 HTML，并分为今日关注和暂无机会"""
     # 分类
@@ -348,19 +362,16 @@ def generate_html(results, report_time):
     other_list = []
     for item in results:
         premium = item['premium']
-        limit_str = item['limit']  # 格式如 "暂停申购, -" 或 "开放申购, 不限额" 或 "限额申购, 1,000"
-        # 解析状态和限额文本
-        if ', ' in limit_str:
-            status_part, limit_part = limit_str.split(', ', 1)
-        else:
-            status_part = limit_str
-            limit_part = ""
+        limit_str = item['limit']
+        status_part, amount_desc, limit_value = parse_limit_info(limit_str)
 
-        # 今日关注条件：溢价率>3% 且 状态不是暂停申购 且 限额不是不限额
-        if (premium > 0.03 and 
-            status_part != "暂停申购" and 
-            limit_part != "不限额"):
-            focus_list.append(item)
+        # 今日关注基本条件：溢价率>3% 且 状态不是暂停申购 且 有限额（不是不限额）
+        if premium > 0.03 and status_part != "暂停申购" and amount_desc != "不限额":
+            # 额外条件：如果是开放申购，且限额>10000，则放入暂无机会
+            if status_part == "开放申购" and limit_value is not None and limit_value > 10000:
+                other_list.append(item)
+            else:
+                focus_list.append(item)
         else:
             other_list.append(item)
 
@@ -398,6 +409,8 @@ def generate_html(results, report_time):
     .container {{ max-width: 500px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; }}
     .header {{ padding: 15px; border-bottom: 1px solid #eee; background: #fff; }}
     .section {{ padding: 10px 15px; background: #f9f9fc; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #555; }}
+    /* 为第二个板块增加上边距，视觉区分更明显 */
+    .section + .section {{ margin-top: 15px; }}
     .row {{ display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f0f0f0; }}
     .right {{ text-align: right; }}
     .premium_line {{ display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 4px; }}
@@ -419,10 +432,10 @@ def generate_html(results, report_time):
             <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: {report_time}</p>
         </div>
 
-        <div class="section">🔥 今日关注 (溢价>3% 且 有限额且非暂停)</div>
+        <div class="section">今日关注</div>
         {focus_rows if focus_rows else '<div class="empty">暂无满足条件的基金</div>'}
 
-        <div class="section">⏳ 暂无机会</div>
+        <div class="section">暂无机会</div>
         {other_rows if other_rows else '<div class="empty">暂无其他基金</div>'}
     </div>
 </body>
@@ -430,14 +443,14 @@ def generate_html(results, report_time):
 
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("--- 报告生成成功: index.html (分板块) ---")
+    print("--- 报告生成成功: index.html (分板块，视觉优化) ---")
 
 # ==============================================================================
 # ====== 9. 主程序入口 ======
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.3 启动... {now}")
+    print(f"基金监控系统 v3.4 启动... {now}")
 
     # 运行频率控制
     if not should_run():
