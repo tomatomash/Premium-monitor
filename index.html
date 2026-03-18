@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -11,9 +10,10 @@
     .row { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f9f9f9; }
     .right { text-align: right; }
     .premium_line { display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 4px; }
-    .premium { font-weight: 900; font-size: 20px; } /* 溢价率数值加粗 */
+    .premium { font-weight: 900; font-size: 20px; }
     .signal-tag { font-size: 13px; margin-left: 6px; color: #666; }
-    .limit_info { font-size: 12px; color: #888; margin-top: 2px; } /* 限购信息置于下方 */
+    .limit_info { font-size: 12px; color: #888; margin-top: 2px; }
+    .trade_type { font-size: 11px; color: #aaa; }
     .strong_arbitrage { color: #e63946; }
     .watch { color: #f4a261; }
     .normal { color: #2a9d8f; }
@@ -24,7 +24,7 @@
     <div class="container">
         <div class="header">
             <h3 style="margin:0; font-size:18px;">实时溢价与限购监控</h3>
-            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: 2026-03-18 08:00:46</p>
+            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: 2026-03-18 10:16:12</p>
         </div>
         
 <div class="row">
@@ -34,36 +34,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">30.71%</span>
+            <span class="premium strong_arbitrage">30.68%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">嘉实原油</b><br>
-        <span style="color:#999; font-size:12px;">160723</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium strong_arbitrage">22.47%</span>
-            <span class="signal-tag">🔴 套利</span>
-        </div>
-        <div class="limit_info">暂停申购, -</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">原油基金</b><br>
-        <span style="color:#999; font-size:12px;">161129</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium strong_arbitrage">21.52%</span>
-            <span class="signal-tag">🔴 套利</span>
-        </div>
-        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -73,10 +48,39 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">19.52%</span>
+            <span class="premium strong_arbitrage">25.66%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">嘉实原油</b><br>
+        <span style="color:#999; font-size:12px;">160723</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium strong_arbitrage">22.97%</span>
+            <span class="signal-tag">🔴 套利</span>
+        </div>
+        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">原油基金</b><br>
+        <span style="color:#999; font-size:12px;">161129</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium strong_arbitrage">22.03%</span>
+            <span class="signal-tag">🔴 套利</span>
+        </div>
+        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -86,10 +90,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">16.30%</span>
+            <span class="premium strong_arbitrage">19.20%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -99,36 +104,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">9.02%</span>
+            <span class="premium strong_arbitrage">9.51%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">弘德红利</b><br>
-        <span style="color:#999; font-size:12px;">501227</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium watch">3.65%</span>
-            <span class="signal-tag">🟡 关注</span>
-        </div>
-        <div class="limit_info">开放申购, 不限额</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">华宝油气</b><br>
-        <span style="color:#999; font-size:12px;">162411</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium normal">2.63%</span>
-            <span class="signal-tag">⚪ 正常</span>
-        </div>
-        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -138,10 +118,25 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium normal">2.55%</span>
+            <span class="premium watch">3.56%</span>
+            <span class="signal-tag">🟡 关注</span>
+        </div>
+        <div class="limit_info">限额申购, 100,000</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">华宝油气</b><br>
+        <span style="color:#999; font-size:12px;">162411</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium normal">2.97%</span>
             <span class="signal-tag">⚪ 正常</span>
         </div>
-        <div class="limit_info">限额申购, 100,000元</div>
+        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -151,10 +146,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium normal">1.22%</span>
+            <span class="premium normal">2.64%</span>
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -164,10 +160,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium normal">0.74%</span>
+            <span class="premium normal">1.60%</span>
             <span class="signal-tag">⚪ 正常</span>
         </div>
-        <div class="limit_info">限额申购, 10元</div>
+        <div class="limit_info">限额申购, 10</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
 <div class="row">
@@ -177,114 +174,11 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium normal">0.50%</span>
+            <span class="premium normal">1.04%</span>
             <span class="signal-tag">⚪ 正常</span>
         </div>
-        <div class="limit_info">限额申购, 500,000元</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">标普500</b><br>
-        <span style="color:#999; font-size:12px;">161125</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.06%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">限额申购, 10元</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">黄金主题</b><br>
-        <span style="color:#999; font-size:12px;">161116</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.27%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">暂停申购, -</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">纳指100</b><br>
-        <span style="color:#999; font-size:12px;">161130</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.41%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">限额申购, 10元</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">全球油气</b><br>
-        <span style="color:#999; font-size:12px;">163208</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.57%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">暂停申购, -</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">科创投资</b><br>
-        <span style="color:#999; font-size:12px;">501082</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.78%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">开放申购, 不限额</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">银华鑫盛</b><br>
-        <span style="color:#999; font-size:12px;">501022</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.89%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">开放申购, 不限额</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">财通精选</b><br>
-        <span style="color:#999; font-size:12px;">501001</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-0.94%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">开放申购, 不限额</div>
-    </div>
-</div>
-<div class="row">
-    <div>
-        <b style="font-size:15px; color:#333;">财通升级</b><br>
-        <span style="color:#999; font-size:12px;">501015</span>
-    </div>
-    <div class="right">
-        <div class="premium_line">
-            <span class="premium discount">-1.24%</span>
-            <span class="signal-tag">⚫ 折价</span>
-        </div>
-        <div class="limit_info">开放申购, 不限额</div>
+        <div class="limit_info">限额申购, 500,000</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -294,23 +188,67 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium discount">-1.92%</span>
-            <span class="signal-tag">⚫ 折价</span>
+            <span class="premium normal">0.82%</span>
+            <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
     <div>
-        <b style="font-size:15px; color:#333;">标普医疗</b><br>
-        <span style="color:#999; font-size:12px;">161126</span>
+        <b style="font-size:15px; color:#333;">弘德红利</b><br>
+        <span style="color:#999; font-size:12px;">501227</span>
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium discount">-2.14%</span>
-            <span class="signal-tag">⚫ 折价</span>
+            <span class="premium normal">0.78%</span>
+            <span class="signal-tag">⚪ 正常</span>
         </div>
-        <div class="limit_info">限额申购, 10元</div>
+        <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">纳指100</b><br>
+        <span style="color:#999; font-size:12px;">161130</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium normal">0.53%</span>
+            <span class="signal-tag">⚪ 正常</span>
+        </div>
+        <div class="limit_info">限额申购, 10</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">标普500</b><br>
+        <span style="color:#999; font-size:12px;">161125</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium normal">0.22%</span>
+            <span class="signal-tag">⚪ 正常</span>
+        </div>
+        <div class="limit_info">限额申购, 10</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">科创投资</b><br>
+        <span style="color:#999; font-size:12px;">501082</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium normal">0.15%</span>
+            <span class="signal-tag">⚪ 正常</span>
+        </div>
+        <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
     </div>
 </div>
 <div class="row">
@@ -320,10 +258,95 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium discount">-2.48%</span>
+            <span class="premium discount">-0.13%</span>
             <span class="signal-tag">⚫ 折价</span>
         </div>
         <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">黄金主题</b><br>
+        <span style="color:#999; font-size:12px;">161116</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium discount">-0.34%</span>
+            <span class="signal-tag">⚫ 折价</span>
+        </div>
+        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">财通升级</b><br>
+        <span style="color:#999; font-size:12px;">501015</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium discount">-0.55%</span>
+            <span class="signal-tag">⚫ 折价</span>
+        </div>
+        <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">全球油气</b><br>
+        <span style="color:#999; font-size:12px;">163208</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium discount">-0.75%</span>
+            <span class="signal-tag">⚫ 折价</span>
+        </div>
+        <div class="limit_info">暂停申购, -</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">银华鑫盛</b><br>
+        <span style="color:#999; font-size:12px;">501022</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium discount">-1.11%</span>
+            <span class="signal-tag">⚫ 折价</span>
+        </div>
+        <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">财通精选</b><br>
+        <span style="color:#999; font-size:12px;">501001</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium discount">-1.23%</span>
+            <span class="signal-tag">⚫ 折价</span>
+        </div>
+        <div class="limit_info">开放申购, 不限额</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_身份证限购</div>
+    </div>
+</div>
+<div class="row">
+    <div>
+        <b style="font-size:15px; color:#333;">标普医疗</b><br>
+        <span style="color:#999; font-size:12px;">161126</span>
+    </div>
+    <div class="right">
+        <div class="premium_line">
+            <span class="premium discount">-1.77%</span>
+            <span class="signal-tag">⚫ 折价</span>
+        </div>
+        <div class="limit_info">限额申购, 10</div>
+        <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">场内_账户限购(可拖拉机)</div>
     </div>
 </div>
     </div>
