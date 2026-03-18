@@ -174,7 +174,6 @@ def fund_type_judge(code):
     else:
         return "场外申购"
 
-# 恢复公告增强函数，并增强关键词匹配
 def fetch_notice_text(code):
     """获取基金公告页面前2000字符"""
     try:
@@ -280,13 +279,96 @@ def detect_type(dwjz, gsz):
     return "NORMAL"
 
 # ==============================================================================
-# ====== 7. HTML 报告生成 ======
+# ====== 7. 运行频率控制（开市/休市） ======
+# ==============================================================================
+def should_run():
+    """
+    判断当前是否应该运行监控。
+    若在交易时段内（周一至周五 9:30-11:30 或 13:00-15:00），返回 True；
+    若不在交易时段，则检查上次运行时间是否超过3小时，若超过返回 True，否则 False。
+    使用文件 last_run.txt 记录上次运行时间戳（UTC+8 日期时间字符串）。
+    """
+    now = datetime.now(CN_TZ)
+    weekday = now.weekday()  # 0=周一, 6=周日
+    hour = now.hour
+    minute = now.minute
+
+    # 判断是否在交易时段内
+    in_trading_session = False
+    if 0 <= weekday <= 4:  # 周一至周五
+        # 上午 9:30 - 11:30
+        if (hour == 9 and minute >= 30) or (10 <= hour <= 10) or (hour == 11 and minute <= 30):
+            in_trading_session = True
+        # 下午 13:00 - 15:00
+        elif (13 <= hour <= 14) or (hour == 15 and minute == 0):
+            in_trading_session = True
+
+    if in_trading_session:
+        # 交易时段直接运行
+        return True
+
+    # 休市时段：检查上次运行时间
+    last_run_file = "last_run.txt"
+    if os.path.exists(last_run_file):
+        try:
+            with open(last_run_file, "r") as f:
+                last_run_str = f.read().strip()
+                last_run = datetime.strptime(last_run_str, "%Y-%m-%d %H:%M:%S")
+                last_run = CN_TZ.localize(last_run)  # 设为北京时间
+        except:
+            last_run = None
+    else:
+        last_run = None
+
+    if last_run is None:
+        # 没有记录，允许运行
+        return True
+
+    # 计算时间差（秒）
+    delta = (now - last_run).total_seconds()
+    if delta >= 3 * 3600:  # 3小时
+        return True
+    else:
+        print(f"休市时段，距离上次运行不足3小时（{delta/3600:.1f}小时），跳过本次运行。")
+        return False
+
+def update_last_run():
+    """更新上次运行时间文件"""
+    now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    with open("last_run.txt", "w") as f:
+        f.write(now)
+
+# ==============================================================================
+# ====== 8. HTML 报告生成（分板块） ======
 # ==============================================================================
 def generate_html(results, report_time):
-    """生成包含溢价、限购、交易方式的移动端友好 HTML"""
-    rows = ""
+    """生成包含溢价、限购、交易方式的移动端友好 HTML，并分为今日关注和暂无机会"""
+    # 分类
+    focus_list = []
+    other_list = []
     for item in results:
-        rows += f'''
+        premium = item['premium']
+        limit_str = item['limit']  # 格式如 "暂停申购, -" 或 "开放申购, 不限额" 或 "限额申购, 1,000"
+        # 解析状态和限额文本
+        if ', ' in limit_str:
+            status_part, limit_part = limit_str.split(', ', 1)
+        else:
+            status_part = limit_str
+            limit_part = ""
+
+        # 今日关注条件：溢价率>3% 且 状态不是暂停申购 且 限额不是不限额
+        if (premium > 0.03 and 
+            status_part != "暂停申购" and 
+            limit_part != "不限额"):
+            focus_list.append(item)
+        else:
+            other_list.append(item)
+
+    # 生成两个板块的HTML行
+    def build_rows(items):
+        rows = ""
+        for item in items:
+            rows += f'''
 <div class="row">
     <div>
         <b style="font-size:15px; color:#333;">{item['name']}</b><br>
@@ -301,6 +383,10 @@ def generate_html(results, report_time):
         <div class="trade_type" style="font-size:11px; color:#aaa; margin-top:2px;">{item['trade_type']}</div>
     </div>
 </div>'''
+        return rows
+
+    focus_rows = build_rows(focus_list)
+    other_rows = build_rows(other_list)
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -311,7 +397,8 @@ def generate_html(results, report_time):
     body {{ font-family: -apple-system, sans-serif; background: #f4f4f7; margin: 0; padding: 15px; }}
     .container {{ max-width: 500px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; }}
     .header {{ padding: 15px; border-bottom: 1px solid #eee; background: #fff; }}
-    .row {{ display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f9f9f9; }}
+    .section {{ padding: 10px 15px; background: #f9f9fc; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #555; }}
+    .row {{ display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f0f0f0; }}
     .right {{ text-align: right; }}
     .premium_line {{ display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 4px; }}
     .premium {{ font-weight: 900; font-size: 20px; }}
@@ -322,6 +409,7 @@ def generate_html(results, report_time):
     .watch {{ color: #f4a261; }}
     .normal {{ color: #2a9d8f; }}
     .discount {{ color: #6d6d6d; }}
+    .empty {{ padding: 20px; text-align: center; color: #aaa; }}
 </style>
 </head>
 <body>
@@ -330,22 +418,32 @@ def generate_html(results, report_time):
             <h3 style="margin:0; font-size:18px;">实时溢价与限购监控</h3>
             <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: {report_time}</p>
         </div>
-        {rows}
+
+        <div class="section">🔥 今日关注 (溢价>3% 且 有限额且非暂停)</div>
+        {focus_rows if focus_rows else '<div class="empty">暂无满足条件的基金</div>'}
+
+        <div class="section">⏳ 暂无机会</div>
+        {other_rows if other_rows else '<div class="empty">暂无其他基金</div>'}
     </div>
 </body>
 </html>"""
 
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("--- 报告生成成功: index.html (含限购/交易方式) ---")
+    print("--- 报告生成成功: index.html (分板块) ---")
 
 # ==============================================================================
-# ====== 8. 主程序入口 ======
+# ====== 9. 主程序入口 ======
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.2 启动... {now}")
-    
+    print(f"基金监控系统 v3.3 启动... {now}")
+
+    # 运行频率控制
+    if not should_run():
+        print("本次触发未满足运行条件，退出。")
+        return
+
     # 获取限购信息字典
     print("正在获取限购数据...")
     limits = get_purchase_limits_dict()
@@ -424,6 +522,9 @@ def run():
 
     # 生成 HTML
     generate_html(results, now)
+    
+    # 更新上次运行时间
+    update_last_run()
     print("任务执行完毕。")
 
 if __name__ == "__main__":
