@@ -7,6 +7,8 @@
 # 触发频率：每45分钟一次（GitHub Actions cron 支持）
 # 功能：运行合并后的 monitor.py，生成包含溢价率、限购信息、交易方式的 index.html，
 #       并部署到 gh-pages 分支。
+# 说明：脚本内部会根据北京时间自动判断是否在交易时段（开市/休市），
+#       开市时段每45分钟运行一次，休市时段每3小时运行一次。
 # ==============================================================================
 
 name: Unified Fund Monitor
@@ -14,7 +16,7 @@ name: Unified Fund Monitor
 on:
   workflow_dispatch:                      # 允许手动触发
   schedule:
-    - cron: '*/45 * * * *'                # 每45分钟运行一次（例如 00:00, 00:45, 01:30 ...）
+    - cron: '*/45 * * * *'                # 每45分钟运行一次
 
 # 必须添加权限，以便 Actions 能推送代码到 gh-pages 分支
 permissions:
@@ -37,14 +39,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 3. 安装所有依赖（合并自三个原始 yml）
+      # 3. 安装所有依赖
       - name: Install dependencies
         run: |
-          # 安装核心库：requests, pytz, beautifulsoup4 (来自原溢价率 yml 和拖拉机 yml)
-          # 安装 akshare, pandas, numpy (来自原限购 yml)
           pip install requests pytz beautifulsoup4 akshare pandas numpy
 
-      # 4. 运行合并后的监控脚本（monitor.py 已包含所有功能）
+      # 4. 运行合并后的监控脚本
       - name: Run unified monitor script
         run: python monitor.py
 
