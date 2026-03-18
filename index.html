@@ -8,6 +8,8 @@
     .container { max-width: 500px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; }
     .header { padding: 15px; border-bottom: 1px solid #eee; background: #fff; }
     .section { padding: 10px 15px; background: #f9f9fc; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #555; }
+    /* 为第二个板块增加上边距，视觉区分更明显 */
+    .section + .section { margin-top: 15px; }
     .row { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f0f0f0; }
     .right { text-align: right; }
     .premium_line { display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 4px; }
@@ -26,10 +28,10 @@
     <div class="container">
         <div class="header">
             <h3 style="margin:0; font-size:18px;">实时溢价与限购监控</h3>
-            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: 2026-03-18 15:10:56</p>
+            <p style="margin:5px 0 0; font-size:12px; color:#999;">更新: 2026-03-18 15:30:41</p>
         </div>
 
-        <div class="section">🔥 今日关注 (溢价>3% 且 有限额且非暂停)</div>
+        <div class="section">今日关注</div>
         
 <div class="row">
     <div>
@@ -46,7 +48,7 @@
     </div>
 </div>
 
-        <div class="section">⏳ 暂无机会</div>
+        <div class="section">暂无机会</div>
         
 <div class="row">
     <div>
@@ -83,7 +85,7 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">17.55%</span>
+            <span class="premium strong_arbitrage">17.54%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
@@ -97,7 +99,7 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium strong_arbitrage">17.16%</span>
+            <span class="premium strong_arbitrage">17.17%</span>
             <span class="signal-tag">🔴 套利</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
@@ -265,7 +267,7 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium normal">0.41%</span>
+            <span class="premium normal">0.42%</span>
             <span class="signal-tag">⚪ 正常</span>
         </div>
         <div class="limit_info">限额申购, 500,000</div>
@@ -307,7 +309,7 @@
     </div>
     <div class="right">
         <div class="premium_line">
-            <span class="premium discount">-0.58%</span>
+            <span class="premium discount">-0.54%</span>
             <span class="signal-tag">⚫ 折价</span>
         </div>
         <div class="limit_info">暂停申购, -</div>
