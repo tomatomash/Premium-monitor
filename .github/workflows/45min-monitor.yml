@@ -1,24 +1,57 @@
-name: 45min-monitor
+# ==============================================================================
+# 统一基金监控 Workflow
+# 合并自：
+#   1. 45min-monitor溢价率计算的.yml（主骨架）
+#   2. fund_monitor限购的.yml
+#   3. main定时检查是否可以拖拉机的.yml
+# 触发频率：每45分钟一次（GitHub Actions cron 支持）
+# 功能：运行合并后的 monitor.py，生成包含溢价率、限购信息、交易方式的 index.html，
+#       并部署到 gh-pages 分支。
+# ==============================================================================
+
+name: Unified Fund Monitor
+
 on:
-  workflow_dispatch:
+  workflow_dispatch:                      # 允许手动触发
   schedule:
-    - cron: '*/45 * * * *'
+    - cron: '*/45 * * * *'                # 每45分钟运行一次（例如 00:00, 00:45, 01:30 ...）
+
+# 必须添加权限，以便 Actions 能推送代码到 gh-pages 分支
+permissions:
+  contents: write
+
 jobs:
-  run_monitor:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.10'}
-      
-      # 这里增加了 beautifulsoup4，解决了报错问题
-      - run: pip install requests pytz beautifulsoup4
-      
-      - run: python monitor.py
-      - name: Deploy
+      # 1. 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. 设置 Python 环境（使用 3.10 稳定版）
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 3. 安装所有依赖（合并自三个原始 yml）
+      - name: Install dependencies
+        run: |
+          # 安装核心库：requests, pytz, beautifulsoup4 (来自原溢价率 yml 和拖拉机 yml)
+          # 安装 akshare, pandas, numpy (来自原限购 yml)
+          pip install requests pytz beautifulsoup4 akshare pandas numpy
+
+      # 4. 运行合并后的监控脚本（monitor.py 已包含所有功能）
+      - name: Run unified monitor script
+        run: python monitor.py
+
+      # 5. 部署生成的 index.html 到 gh-pages 分支
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
+          publish_dir: ./                   # index.html 位于仓库根目录
+          publish_branch: gh-pages           # 推送到 gh-pages 分支
