@@ -174,7 +174,7 @@ def fund_type_judge(code):
     else:
         return "场外申购"
 
-# 恢复公告增强函数
+# 恢复公告增强函数，并增强关键词匹配
 def fetch_notice_text(code):
     """获取基金公告页面前2000字符"""
     try:
@@ -187,15 +187,25 @@ def fetch_notice_text(code):
     return ""
 
 def enhance_judge(code, base_result):
-    """根据公告内容修正交易方式判断"""
+    """根据公告内容修正交易方式判断，优先检测身份证限购关键词"""
     text = fetch_notice_text(code)
 
     if not text:
         return base_result
 
-    if "单个投资者" in text or "每个账户" in text:
+    # 调试输出公告前200字符（便于查看抓取内容）
+    print(f"\n[公告调试] {code} 前200字符:\n{text[:200]}\n")
+
+    # 扩展身份证限购关键词列表
+    id_keywords = [
+        "单个投资者", "单个账户", "单一投资者", "单一账户",
+        "单个基金账户", "每个基金账户", "单日单个基金账户"
+    ]
+    # 先检查身份证限购关键词（即使有暂停申购字样）
+    if any(kw in text for kw in id_keywords):
         return "场内_身份证限购（公告识别）"
 
+    # 再检查暂停申购
     if "暂停申购" in text:
         return "暂停申购"
 
@@ -334,7 +344,7 @@ def generate_html(results, report_time):
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.1 启动... {now}")
+    print(f"基金监控系统 v3.2 启动... {now}")
     
     # 获取限购信息字典
     print("正在获取限购数据...")
