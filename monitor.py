@@ -174,26 +174,32 @@ def fund_type_judge(code):
     else:
         return "场外申购"
 
-# 如果需要公告增强，可取消注释以下函数（但当前未使用，因为限购状态已由akshare提供）
-# def fetch_notice_text(code):
-#     try:
-#         url = f"https://fundf10.eastmoney.com/jjgg_{code}.html"
-#         r = requests.get(url, timeout=5)
-#         if r.status_code == 200:
-#             return r.text[:2000]
-#     except:
-#         pass
-#     return ""
+# 恢复公告增强函数
+def fetch_notice_text(code):
+    """获取基金公告页面前2000字符"""
+    try:
+        url = f"https://fundf10.eastmoney.com/jjgg_{code}.html"
+        r = requests.get(url, headers=HEADERS, timeout=5)
+        if r.status_code == 200:
+            return r.text[:2000]
+    except:
+        pass
+    return ""
 
-# def enhance_judge(code, base_result):
-#     text = fetch_notice_text(code)
-#     if not text:
-#         return base_result
-#     if "单个投资者" in text or "每个账户" in text:
-#         return "场内_身份证限购（公告识别）"
-#     if "暂停申购" in text:
-#         return "暂停申购"
-#     return base_result
+def enhance_judge(code, base_result):
+    """根据公告内容修正交易方式判断"""
+    text = fetch_notice_text(code)
+
+    if not text:
+        return base_result
+
+    if "单个投资者" in text or "每个账户" in text:
+        return "场内_身份证限购（公告识别）"
+
+    if "暂停申购" in text:
+        return "暂停申购"
+
+    return base_result
 
 # ==============================================================================
 # ====== 6. 溢价率计算核心模块 (原 monitor溢价率计算.py) ======
@@ -328,7 +334,7 @@ def generate_html(results, report_time):
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.0 启动... {now}")
+    print(f"基金监控系统 v3.1 启动... {now}")
     
     # 获取限购信息字典
     print("正在获取限购数据...")
@@ -386,8 +392,9 @@ def run():
             # 获取限购信息（默认显示未知）
             limit_info = limits.get(code, "未知状态, -")
             
-            # 获取交易方式
-            trade_type = fund_type_judge(code)
+            # 获取交易方式（基础判断 + 公告增强）
+            base_trade_type = fund_type_judge(code)
+            trade_type = enhance_judge(code, base_trade_type)
 
             results.append({
                 "code": code,
