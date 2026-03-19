@@ -1,0 +1,24 @@
+name: Keepalive
+
+on:
+  schedule:
+    - cron: '0 0 */20 * *'   # 每20天跑一次（安全低频）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Keep repo alive
+        run: |
+          git config --global user.name "keepalive-bot"
+          git config --global user.email "keepalive@github.com"
+          git commit --allow-empty -m "keepalive"
+          git push
