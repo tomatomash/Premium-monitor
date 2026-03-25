@@ -42,7 +42,7 @@ jobs:
       # 3. 安装所有依赖
       - name: Install dependencies
         run: |
-          pip install requests pytz beautifulsoup4 akshare pandas numpy
+          pip install requests pytz beautifulsoup4 akshare pandas numpy yfinance
 
       # 4. 运行合并后的监控脚本
       - name: Run unified monitor script
