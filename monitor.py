@@ -11,8 +11,7 @@ from bs4 import BeautifulSoup
 
 # ==============================================================================
 # ====== 1. 基金配置区间 (FUND CONFIGURATION) ======
-# 说明：此区间定义监控的基金列表，包含代码、名称、对标 ticker 及权重 w。\n#       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。
-# ==============================================================================
+# 说明：此区间定义监控的基金列表，包含代码、名称、对标 ticker 及权重 w。\n#       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。\n# ==============================================================================
 FUND_CONFIG = {
     # ==================================================================================
 # 💡 核心配置参数说明 (Core Parameter Guide):
@@ -43,7 +42,7 @@ FUND_CONFIG = {
     "161226": {"name": "白银基金", "ticker": "SLV", "w": 0.95},
     # 新增基金
     "161130": {"name": "纳指100", "ticker": "QQQ", "w": 0.95},
-    "162411": {"name": "华宝油气", "ticker": "XOP", "w": 0.90},
+    "162411": {"name": "华宝油油气", "ticker": "XOP", "w": 0.90},
     "163208": {"name": "全球油气", "ticker": "XOP", "w": 0.90},
 # ------ 补全截图缺失标的 (Missing from Screenshots) ------
     "162719": {"name": "石油LOF", "ticker": "IXC", "w": 0.85},
@@ -180,11 +179,17 @@ def get_ping_data(code):
 
 def get_market_change(ticker):
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
+        # 修正：通过 interval=1d 和 range=5d 抓取确定的历史收盘价，防止早盘数据跳变
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=5d"
         r = requests.get(url, headers=HEADERS, timeout=10)
-        data = r.json()["chart"]["result"][0]["meta"]
-        return (data["regularMarketPrice"] / data["previousClose"]) - 1
-    except: return 0.0
+        chart_data = r.json()["chart"]["result"][0]
+        closes = chart_data["indicators"]["quote"][0]["close"]
+        # 过滤 None 值，获取最近两个有效的交易日收盘价
+        valid_closes = [c for c in closes if c is not None]
+        if len(valid_closes) >= 2:
+            return (valid_closes[-1] / valid_closes[-2]) - 1
+    except: pass
+    return 0.0
 
 def get_fx():
     return get_market_change("CNH=F")
@@ -365,7 +370,7 @@ def generate_html(results, report_time):
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.7 启动... {now}")
+    print(f"基金监控系统 v3.8 启动... {now}")
     if not should_run(): return
     limits = get_purchase_limits_dict()
     fx_change = get_fx()
@@ -389,7 +394,7 @@ def run():
                 
                 # 实时预估净值 = 昨收净值 * (1 + 标的涨跌 * 权重) * 汇率
                 est_nav = dwjz * (1 + asset_change * info["w"]) * fx
-                # 溢价率由实时预估净值唯一决定，不再与过期净值平均
+                # 核心修正：QDII 基金溢价率仅由实时预估净值决定，彻底剔除 gsz 的干扰
                 premium = (price - est_nav) / est_nav
                 
             # --- 分支 B: 无 Ticker (走国内实时接口) ---
@@ -411,6 +416,7 @@ def run():
                 "trade_type": enhance_judge(code, fund_type_judge(code))
             })
         except: continue
+    # 按溢价率从高到低排序显示
     results.sort(key=lambda x: x["premium"], reverse=True)
     generate_html(results, now)
     update_last_run()
