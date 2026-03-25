@@ -11,8 +11,7 @@ from bs4 import BeautifulSoup
 
 # ==============================================================================
 # ====== 1. 基金配置区间 (FUND CONFIGURATION) ======
-# 说明：此区间定义监控的基金列表，包含代码、名称、对标 ticker 及权重 w。
-#       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。
+# 说明：此区间定义监控的基金列表，包含代码、名称、对标 ticker 及权重 w。\n#       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。
 # ==============================================================================
 FUND_CONFIG = {
     # ==================================================================================
@@ -216,10 +215,6 @@ def get_price(code):
         return price if price != 0 else None
     except: return None
 
-def detect_type(dwjz, gsz):
-    if gsz and abs(gsz - dwjz) > 0.005: return "QDII_LOF"
-    return "NORMAL"
-
 # ==============================================================================
 # ====== 7. 运行频率控制 ======
 # ==============================================================================
@@ -370,7 +365,7 @@ def generate_html(results, report_time):
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.6 启动... {now}")
+    print(f"基金监控系统 v3.7 启动... {now}")
     if not should_run(): return
     limits = get_purchase_limits_dict()
     fx_change = get_fx()
@@ -379,24 +374,36 @@ def run():
         try:
             price = get_price(code)
             if not price: continue
+            
             dwjz, gsz = get_fund_estimate(code)
             if not dwjz: dwjz = get_em_nav(code)
             if not dwjz: continue
-            ftype = detect_type(dwjz, gsz)
+            
             ticker = info["ticker"]
+            
+            # --- 分支 A: 有 Ticker (走全球定价模型) ---
             if ticker:
                 asset_change = get_market_change(ticker)
-                fx = 1 + fx_change if ticker != "GC=F" else 1
-            else: asset_change, fx = 0, 1
-            est_nav = dwjz * (1 + asset_change * info["w"]) * fx
-            if ftype == "QDII_LOF" and gsz: est_nav = gsz
-            p1 = (price - dwjz) / dwjz if dwjz else 0
-            p2 = (price - est_nav) / est_nav if est_nav else 0
-            premium = (p1 + p2) / 2
+                # 黄金(GC=F)不计算汇率波动，其他自动叠加 CNH 波动
+                fx = (1 + fx_change) if ticker != "GC=F" else 1
+                
+                # 实时预估净值 = 昨收净值 * (1 + 标的涨跌 * 权重) * 汇率
+                est_nav = dwjz * (1 + asset_change * info["w"]) * fx
+                # 溢价率由实时预估净值唯一决定，不再与过期净值平均
+                premium = (price - est_nav) / est_nav
+                
+            # --- 分支 B: 无 Ticker (走国内实时接口) ---
+            else:
+                # 优先用天天基金实时估算值(gsz)，若抓不到则回退到昨日净值(dwjz)
+                realtime_val = gsz if gsz else dwjz
+                premium = (price - realtime_val) / realtime_val
+
+            # --- 信号判定 ---
             if premium >= 0.05: signal, color = "🔴 尝试", "strong_arbitrage"
             elif premium >= 0.03: signal, color = "🟡 关注", "watch"
             elif premium >= 0: signal, color = "⚪ 正常", "normal"
             else: signal, color = "⚫ 折价", "discount"
+            
             results.append({
                 "code": code, "name": info["name"], "premium": premium,
                 "signal": signal, "color": color, 
