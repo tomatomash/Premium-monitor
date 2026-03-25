@@ -8,10 +8,13 @@ import os
 import time
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
+import yfinance as yf  # 新增：用于获取稳定的历史复权收盘价
 
 # ==============================================================================
 # ====== 1. 基金配置区间 (FUND CONFIGURATION) ======
-# 说明：此区间定义监控的基金列表，包含代码、名称、对标 ticker 及权重 w。\n#       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。\n# ==============================================================================
+# 说明：此区间定义监控的基金列表，包含代码、名称、对标 ticker 及权重 w。
+#       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。
+# ==============================================================================
 FUND_CONFIG = {
     # ==================================================================================
 # 💡 核心配置参数说明 (Core Parameter Guide):
@@ -168,7 +171,7 @@ def enhance_judge(code, base_result):
     return base_result
 
 # ==============================================================================
-# ====== 6. 溢价率计算核心模块 ======
+# ====== 6. 溢价率计算核心模块 (增强稳定性) ======
 # ==============================================================================
 def get_ping_data(code):
     if code in PING_CACHE: return PING_CACHE[code]
@@ -178,17 +181,23 @@ def get_ping_data(code):
     return txt
 
 def get_market_change(ticker):
+    """
+    使用 yfinance 获取最近5个交易日的调整后收盘价（Adj Close），
+    自动处理除权、除息，并返回最新两个交易日的涨跌幅。
+    同时对异常波动进行限幅（±15%），防止期货换月等数据错误。
+    """
     try:
-        # 修正：通过 interval=1d 和 range=5d 抓取确定的历史收盘价，防止早盘数据跳变
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=5d"
-        r = requests.get(url, headers=HEADERS, timeout=10)
-        chart_data = r.json()["chart"]["result"][0]
-        closes = chart_data["indicators"]["quote"][0]["close"]
-        # 过滤 None 值，获取最近两个有效的交易日收盘价
-        valid_closes = [c for c in closes if c is not None]
-        if len(valid_closes) >= 2:
-            return (valid_closes[-1] / valid_closes[-2]) - 1
-    except: pass
+        # 获取5个交易日数据，使用调整后收盘价
+        hist = yf.download(ticker, period="5d", progress=False)
+        if len(hist) >= 2:
+            # 使用 Adj Close 避免除权影响
+            close_prev = hist['Adj Close'].iloc[-2]
+            close_last = hist['Adj Close'].iloc[-1]
+            change = (close_last / close_prev) - 1
+            # 限制单日极端值（防止合约换月、数据跳空）
+            return max(min(change, 0.15), -0.15)
+    except Exception:
+        pass
     return 0.0
 
 def get_fx():
@@ -366,15 +375,16 @@ def generate_html(results, report_time):
     print("--- 报告生成成功: index.html (优化折叠与置灰) ---")
 
 # ==============================================================================
-# ====== 9. 主程序入口 ======
+# ====== 9. 主程序入口 (动态平衡算法) ======
 # ==============================================================================
 def run():
     now = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"基金监控系统 v3.8 启动... {now}")
+    print(f"基金监控系统 v4.1 启动... {now}")
     if not should_run(): return
     limits = get_purchase_limits_dict()
     fx_change = get_fx()
     results = []
+    
     for code, info in FUND_CONFIG.items():
         try:
             price = get_price(code)
@@ -386,20 +396,33 @@ def run():
             
             ticker = info["ticker"]
             
-            # --- 分支 A: 有 Ticker (走全球定价模型) ---
+            # --- 核心平衡逻辑 ---
             if ticker:
                 asset_change = get_market_change(ticker)
-                # 黄金(GC=F)不计算汇率波动，其他自动叠加 CNH 波动
-                fx = (1 + fx_change) if ticker != "GC=F" else 1
+                # 统一使用汇率修正（所有海外资产都受汇率影响）
+                fx = (1 + fx_change)
                 
-                # 实时预估净值 = 昨收净值 * (1 + 标的涨跌 * 权重) * 汇率
+                # 预估净值模型（实时估值）
                 est_nav = dwjz * (1 + asset_change * info["w"]) * fx
-                # 核心修正：QDII 基金溢价率仅由实时预估净值决定，彻底剔除 gsz 的干扰
-                premium = (price - est_nav) / est_nav
                 
-            # --- 分支 B: 无 Ticker (走国内实时接口) ---
+                # 静态溢价（相对于官方已公布净值）
+                p_static = (price - dwjz) / dwjz
+                # 实时溢价（相对于模型预估净值）
+                p_real = (price - est_nav) / est_nav
+                
+                # 动态权重：根据 asset_change 的合理性调整
+                # 若涨跌幅绝对值超过 5%（例如期货换月、除权导致的异常），则提高静态权重
+                if abs(asset_change) > 0.05:
+                    static_weight = 0.8
+                    real_weight = 0.2
+                else:
+                    static_weight = 0.5
+                    real_weight = 0.5
+                
+                premium = p_static * static_weight + p_real * real_weight
+                
             else:
-                # 优先用天天基金实时估算值(gsz)，若抓不到则回退到昨日净值(dwjz)
+                # 国内基金：优先使用天天基金的实时估算值 gsz
                 realtime_val = gsz if gsz else dwjz
                 premium = (price - realtime_val) / realtime_val
 
@@ -415,8 +438,10 @@ def run():
                 "limit": limits.get(code, "未知状态, -"),
                 "trade_type": enhance_judge(code, fund_type_judge(code))
             })
-        except: continue
-    # 按溢价率从高到低排序显示
+        except Exception as e:
+            # 保持原有异常处理，仅跳过出错基金
+            continue
+
     results.sort(key=lambda x: x["premium"], reverse=True)
     generate_html(results, now)
     update_last_run()
