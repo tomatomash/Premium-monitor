@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 #       该配置是主骨架的核心数据源，其他模块（限购、交易方式）均基于此。
 # ==============================================================================
 FUND_CONFIG = {
-# ==================================================================================
+    # ==================================================================================
 # 💡 核心配置参数说明 (Core Parameter Guide):
 # 
 # 1. ticker (实时对标代码): 
@@ -64,8 +64,11 @@ FUND_CONFIG = {
 
 # ==============================================================================
 # ====== 2. 手动修正区间 (MANUAL OVERRIDES) ======
+# 说明：当自动化抓取失效或官方公告有变时，在此手动强行覆盖。
 # ==============================================================================
-MANUAL_OVERRIDES = {}
+MANUAL_OVERRIDES = {
+    # 示例: "161128": {"申购状态": "暂停申购", "日累计限定金额": 0},
+}
 
 # ==============================================================================
 # ====== 3. 公用工具函数 (COMMON UTILS) ======
@@ -74,16 +77,33 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 CN_TZ = pytz.timezone("Asia/Shanghai")
 
 def safe_get(url):
+    """通用的安全请求函数"""
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
         if r.status_code == 200: return r.text
-    except: pass
+    except Exception as e:
+        print(f"请求失败: {url}, 错误: {e}")
     return None
+
+def should_run():
+    """判断是否在 A 股交易时间段或附近执行"""
+    now = datetime.now(CN_TZ)
+    if now.weekday() >= 5: return True # 周末允许运行用于测试
+    curr_time = now.time()
+    # 9:00 - 15:30 视为有效监控时段
+    return time(9,0) <= curr_time <= time(15,35)
+
+def update_last_run():
+    """记录最后一次运行成功的时间，防止 GitHub Actions 运行过于频繁"""
+    with open("last_run.txt", "w") as f:
+        f.write(datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S"))
 
 # ==============================================================================
 # ====== 4. 限购信息模块 (PURCHASE LIMITS) ======
+# 说明：基于 akshare 实时抓取东方财富网的限购数据。
 # ==============================================================================
 def get_fund_data():
+    """抓取全量基金申购状态数据"""
     try:
         df = ak.fund_purchase_em()
         limit_col_map = ['日累计限定金额', '日累计限额', '日限额']
@@ -93,11 +113,25 @@ def get_fund_data():
                 break
         target_codes = list(FUND_CONFIG.keys())
         return df[df['基金代码'].isin(target_codes)].copy()
-    except: return pd.DataFrame()
+    except Exception as e:
+        print(f"限购数据抓取失败: {e}")
+        return pd.DataFrame()
+
+def apply_manual_overrides(df):
+    """应用手动修正逻辑"""
+    for code, override in MANUAL_OVERRIDES.items():
+        mask = df['基金代码'] == code
+        if mask.any():
+            idx = df[mask].index[0]
+            if '申购状态' in override: df.at[idx, '申购状态'] = override['申购状态']
+            if '日累计限定金额' in override: df.at[idx, '日累计限定金额'] = override['日累计限定金额']
+    return df
 
 def get_purchase_limits_dict():
+    """将 DataFrame 转换为易于查询的代码-信息字典"""
     df = get_fund_data()
     if df.empty: return {}
+    df = apply_manual_overrides(df)
     limit_dict = {}
     for _, row in df.iterrows():
         status = row['申购状态']
@@ -109,26 +143,40 @@ def get_purchase_limits_dict():
     return limit_dict
 
 # ==============================================================================
-# ====== 5. 交易方式判断模块 ======
+# ====== 5. 交易方式判断模块 (TRADE TYPE JUDGE) ======
 # ==============================================================================
 def fund_type_judge(code):
+    """根据代码开头初步判断交易属性"""
     if code.startswith("50"): return "场内_身份证限购"
     elif code.startswith("16"): return "场内_账户限购(可拖拉机)"
     else: return "场内交易"
 
+def enhance_judge(code, base_result):
+    """预留：针对特定基金做更细致的交易策略修正"""
+    return base_result
+
 # ==============================================================================
-# ====== 6. 溢价率计算核心模块 ======
+# ====== 6. 溢价率计算核心模块 (PREMIUM CALCULATION) ======
 # ==============================================================================
 def get_market_change(ticker):
+    """从 Yahoo Finance 获取实时资产涨跌幅"""
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=2d"
         r = requests.get(url, headers=HEADERS, timeout=10)
-        data = r.json()["chart"]["result"][0]["meta"]
-        change = (data["regularMarketPrice"] / data["previousClose"]) - 1
+        data = r.json()
+        meta = data["chart"]["result"][0]["meta"]
+        price = meta["regularMarketPrice"]
+        prev_close = meta["previousClose"]
+        change = (price / prev_close) - 1
         return max(min(change, 0.15), -0.15)
     except: return 0.0
 
+def get_fx():
+    """获取离岸人民币 (CNH) 实时汇率波动"""
+    return get_market_change("CNH=F")
+
 def get_fund_estimate(code):
+    """从天天基金获取昨日净值(dwjz)和实时估算值(gsz)"""
     txt = safe_get(f"http://fundgz.1234567.com.cn/js/{code}.js")
     if not txt: return None, None
     try:
@@ -138,6 +186,7 @@ def get_fund_estimate(code):
     except: return None, None
 
 def get_em_nav(code):
+    """备选：从东方财富基金列表抓取净值（当 fundgz 接口失效时）"""
     url = f"http://fund.eastmoney.com/{code}.html"
     txt = safe_get(url)
     if not txt: return None
@@ -148,11 +197,13 @@ def get_em_nav(code):
     except: return None
 
 def get_price(code):
+    """获取场内实时成交价（腾讯接口）"""
     prefix = "sh" if code.startswith("5") else "sz"
     txt = safe_get(f"http://qt.gtimg.cn/q={prefix}{code}")
     if not txt: return None
     try:
-        p = float(txt.split("~")[3])
+        data = txt.split("~")
+        p = float(data[3])
         return p if p != 0 else None
     except: return None
 
@@ -160,7 +211,10 @@ def get_price(code):
 # ====== 8. HTML 报告生成 (HTML GENERATOR) ======
 # ==============================================================================
 def generate_html(results, audit_data, report_time):
-    # 保持你原来的 build_rows 封装
+    # 分离出关注和无机会
+    hot_items = [r for r in results if r['premium'] >= 0.03]
+    normal_items = [r for r in results if r['premium'] < 0.03]
+
     def build_rows(items):
         html = ""
         for r in items:
@@ -182,12 +236,22 @@ def generate_html(results, audit_data, report_time):
             """
         return html
 
-    # 新增审计表格行（这是唯一的新增 HTML 片段）
+    # 构建审计表格行
     audit_rows = ""
     for d in audit_data:
-        audit_rows += f"<tr><td>{d['name']}<br><small>{d['code']}</small></td><td>{d['price']:.3f}</td><td>{d['dwjz']:.4f}</td><td>{d['gsz'] if d['gsz'] else '-'}</td><td>{d['ticker_change']:.2%}</td><td>{d['p1']:.2%}</td><td>{d['p2']:.2%}</td><td style='font-size:9px;color:#888'>{d['formula']}</td><td style='font-weight:bold'>{d['final_p']:.2%}</td></tr>"
+        audit_rows += f"""
+        <tr>
+            <td>{d['name']}<br><small>{d['code']}</small></td>
+            <td>{d['price']:.3f}</td>
+            <td>{d['dwjz']:.4f}</td>
+            <td>{d['gsz'] if d['gsz'] else '-'}</td>
+            <td>{d['ticker_change']:.2%}</td>
+            <td>{d['p1']:.2%}</td>
+            <td>{d['p2']:.2%}</td>
+            <td style="font-size:10px; color:#666;">{d['formula']}</td>
+            <td style="font-weight:bold;">{d['final_p']:.2%}</td>
+        </tr>"""
 
-    # HTML 模版：严格保留你原来的 CSS 和 结构
     html_content = f"""
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -203,6 +267,7 @@ def generate_html(results, audit_data, report_time):
             .header h1 {{ font-size: 28px; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.5px; }}
             .header .time {{ color: var(--sub); font-size: 13px; font-weight: 400; }}
             .card {{ background: var(--card); border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 20px; }}
+            .section-title {{ font-size: 17px; font-weight: 600; padding: 16px 16px 8px; color: var(--text); }}
             .row {{ display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 0.5px solid #f2f2f7; }}
             .row:last-child {{ border-bottom: none; }}
             .info .name {{ display: block; font-size: 16px; font-weight: 600; margin-bottom: 2px; }}
@@ -213,13 +278,17 @@ def generate_html(results, audit_data, report_time):
             .signal-badge {{ font-size: 11px; font-weight: 600; margin: 4px 0; }}
             .limit-info {{ font-size: 10px; color: var(--sub); white-space: nowrap; }}
             .strong_arbitrage {{ color: var(--red); }} .watch {{ color: var(--orange); }} .normal {{ color: var(--green); }} .discount {{ color: var(--gray); }}
+            details summary {{ cursor: pointer; outline: none; list-style: none; }}
+            details summary::-webkit-details-marker {{ display: none; }}
+            .dimmed {{ filter: grayscale(1); opacity: 0.6; }}
             
-            /* 仅为新增模块增加的样式，不影响上方 */
-            .audit-box {{ margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px; }}
-            .audit-btn {{ background: #e5e5ea; padding: 12px; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; display: block; text-align: center; color: #333; }}
-            table {{ width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 10px; background: #fff; }}
-            th, td {{ padding: 6px 2px; border: 1px solid #eee; text-align: center; }}
-            th {{ background: #f9f9fb; color: #888; }}
+            /* 新增审计表格样式，完全独立 */
+            .audit-section {{ margin-top: 40px; padding-bottom: 50px; }}
+            .audit-summary {{ padding: 14px; background: #e5e5ea; border-radius: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #3a3a3c; }}
+            .audit-table-container {{ overflow-x: auto; margin-top: 10px; }}
+            table {{ width: 100%; border-collapse: collapse; font-size: 11px; background: white; border-radius: 8px; }}
+            th, td {{ padding: 8px 4px; border: 0.5px solid #eee; text-align: center; }}
+            th {{ background: #f8f9fa; color: #8e8e93; font-weight: 500; }}
         </style>
     </head>
     <body>
@@ -230,88 +299,125 @@ def generate_html(results, audit_data, report_time):
             </div>
             
             <div class="card">
-                {build_rows(results)}
+                <div class="section-title">今日关注 🔥</div>
+                {build_rows(hot_items) if hot_items else '<div style="padding:20px; color:#8e8e93; text-align:center; font-size:14px;">暂无高溢价标的</div>'}
             </div>
 
-            <div class="audit-box">
-                <details>
-                    <summary class="audit-btn">📊 查看标的数据 (计算审计)</summary>
-                    <div style="overflow-x: auto;">
-                        <table>
-                            <thead>
-                                <tr><th>标的</th><th>价</th><th>昨净</th><th>估值</th><th>Ticker</th><th>P1</th><th>P2</th><th>公式</th><th>最终</th></tr>
-                            </thead>
-                            <tbody>
-                                {audit_rows}
-                            </tbody>
-                        </table>
+            <details>
+                <summary>
+                    <div class="card dimmed" style="margin-bottom: 10px;">
+                        <div class="section-title" style="display: flex; justify-content: space-between;">
+                            <span>暂无机会 (折价/平价)</span>
+                            <span style="font-size: 12px; font-weight: 400;">点击展开查看 ▼</span>
+                        </div>
                     </div>
-                </details>
-            </div>
-        </div> </body>
+                </summary>
+                <div class="card dimmed">
+                    {build_rows(normal_items)}
+                </div>
+            </details>
+
+            <details class="audit-section">
+                <summary class="audit-summary">
+                    <span>📊 标的数据 (实时计算审计)</span>
+                    <span style="font-size:12px; font-weight:normal;">点击展开核对过程 ▼</span>
+                </summary>
+                <div class="audit-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>标的</th><th>价格</th><th>昨净</th><th>估值</th><th>Ticker</th><th>P1</th><th>P2</th><th>公式</th><th>最终</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {audit_rows}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </div>
+    </body>
     </html>
     """
-    with open("index.html", "w", encoding="utf-8") as f: f.write(html_content)
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(html_content)
 
 # ==============================================================================
 # ====== 9. 主程序入口 (MAIN RUNNER) ======
 # ==============================================================================
 def run():
     now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    print(f"任务启动: {now_str}")
+    
+    # 1. 抓取全局公共数据
     limits = get_purchase_limits_dict()
-    fx_change = get_market_change("CNH=F")
+    fx_change = get_fx()
     
-    results, audit_data = [], []
+    results = []
+    audit_data = [] # 记录审计数据
     
+    # 2. 遍历配置进行计算
     for code, info in FUND_CONFIG.items():
         try:
+            # 基础数据抓取
             price = get_price(code)
             if not price: continue
+            
             dwjz, gsz = get_fund_estimate(code)
             if not dwjz: dwjz = get_em_nav(code)
             if not dwjz: continue
             
             ticker = info["ticker"]
-            t_change = 0
+            asset_change = 0
             
-            # --- 保持你原来的逻辑分支 ---
+            # --- 核心逻辑分支 (完全保留 monitor (1222).py 逻辑) ---
             if ticker:
-                t_change = get_market_change(ticker)
+                asset_change = get_market_change(ticker)
                 fx = (1 + fx_change) if ticker != "GC=F" else 1
-                est_nav = dwjz * (1 + t_change * info["w"]) * fx
-                # 分别计算两个维度的溢价用于核对
-                p1 = (price - dwjz) / dwjz
-                p2 = (price - est_nav) / est_nav
-                premium = (p1 + p2) / 2
+                est_nav = dwjz * (1 + asset_change * info["w"]) * fx
+                
+                # 计算审计中间变量
+                p1 = (price - dwjz) / dwjz  # 静态
+                p2 = (price - est_nav) / est_nav # 实时
+                premium = (p1 + p2) / 2 # 平衡算法
                 formula = "(P1+P2)/2 [平衡]"
             else:
-                real_val = gsz if gsz else dwjz
-                premium = (price - real_val) / real_val
+                realtime_val = gsz if gsz else dwjz
+                premium = (price - realtime_val) / realtime_val
                 p1 = (price - dwjz) / dwjz
                 p2 = premium
                 formula = "Price/GSZ [同步]"
 
-            # 信号判定
+            # --- 信号判定 ---
             if premium >= 0.05: signal, color = "🔴 尝试", "strong_arbitrage"
             elif premium >= 0.03: signal, color = "🟡 关注", "watch"
             elif premium >= 0: signal, color = "⚪ 正常", "normal"
             else: signal, color = "⚫ 折价", "discount"
             
-            # 基础展示数据
-            results.append({
+            # 封装结果
+            res_obj = {
                 "code": code, "name": info["name"], "premium": premium,
-                "signal": signal, "color": color, "limit": limits.get(code, "-"),
-                "trade_type": fund_type_judge(code)
-            })
-            # 审计用数据（新增）
+                "signal": signal, "color": color, 
+                "limit": limits.get(code, "未知状态, -"),
+                "trade_type": enhance_judge(code, fund_type_judge(code))
+            }
+            results.append(res_obj)
+
+            # 记录审计信息
             audit_data.append({
                 "code": code, "name": info["name"], "price": price, "dwjz": dwjz, "gsz": gsz,
-                "ticker_change": t_change, "p1": p1, "p2": p2, "formula": formula, "final_p": premium
+                "ticker_change": asset_change, "p1": p1, "p2": p2, "formula": formula, "final_p": premium
             })
-        except: continue
+            
+        except Exception as e:
+            print(f"处理基金 {code} 时出错: {e}")
+            continue
 
+    # 3. 排序并生成报告
     results.sort(key=lambda x: x["premium"], reverse=True)
     generate_html(results, audit_data, now_str)
+    
+    print(f"报告生成成功，总计处理 {len(results)} 个标的。")
 
 if __name__ == "__main__":
     run()
