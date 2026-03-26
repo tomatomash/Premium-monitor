@@ -24,20 +24,19 @@
             .limit-info { font-size: 10px; color: var(--sub); white-space: nowrap; }
             .strong_arbitrage { color: var(--red); } .watch { color: var(--orange); } .normal { color: var(--green); } .discount { color: var(--gray); }
             
-            /* 新增：审计模块样式 */
-            .audit-section { margin-top: 30px; opacity: 0.85; }
-            .summary-box { padding: 14px; background: #e5e5ea; border-radius: 12px; font-weight: 600; display: flex; justify-content: space-between; cursor: pointer; font-size: 14px; }
-            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; }
-            th, td { padding: 8px 4px; border: 0.5px solid #eee; text-align: center; }
-            th { background: #f8f9fa; color: #86868b; font-weight: 500; }
-            small { color: #86868b; font-size: 9px; }
+            /* 仅为新增模块增加的样式，不影响上方 */
+            .audit-box { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px; }
+            .audit-btn { background: #e5e5ea; padding: 12px; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; display: block; text-align: center; color: #333; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 10px; background: #fff; }
+            th, td { padding: 6px 2px; border: 1px solid #eee; text-align: center; }
+            th { background: #f9f9fb; color: #888; }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
                 <h1>折溢价监控</h1>
-                <div class="time">最后更新: 2026-03-26 10:46:15 (北京时间)</div>
+                <div class="time">最后更新: 2026-03-26 10:59:38 (北京时间)</div>
             </div>
             
             <div class="card">
@@ -51,7 +50,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium strong_arbitrage">43.88%</div>
+                    <div class="premium strong_arbitrage">45.65%</div>
                     <div class="signal-badge">🔴 尝试</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -66,7 +65,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium strong_arbitrage">40.48%</div>
+                    <div class="premium strong_arbitrage">42.34%</div>
                     <div class="signal-badge">🔴 尝试</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -81,7 +80,7 @@
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium strong_arbitrage">37.51%</div>
+                    <div class="premium strong_arbitrage">40.36%</div>
                     <div class="signal-badge">🔴 尝试</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -96,7 +95,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium strong_arbitrage">34.54%</div>
+                    <div class="premium strong_arbitrage">33.28%</div>
                     <div class="signal-badge">🔴 尝试</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -111,7 +110,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium strong_arbitrage">16.85%</div>
+                    <div class="premium strong_arbitrage">17.76%</div>
                     <div class="signal-badge">🔴 尝试</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -126,7 +125,7 @@
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium strong_arbitrage">7.98%</div>
+                    <div class="premium strong_arbitrage">8.02%</div>
                     <div class="signal-badge">🔴 尝试</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -141,7 +140,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium watch">4.16%</div>
+                    <div class="premium watch">4.92%</div>
                     <div class="signal-badge">🟡 关注</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -156,7 +155,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium watch">3.93%</div>
+                    <div class="premium watch">3.81%</div>
                     <div class="signal-badge">🟡 关注</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -186,7 +185,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium normal">2.44%</div>
+                    <div class="premium normal">2.27%</div>
                     <div class="signal-badge">⚪ 正常</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -201,7 +200,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium normal">2.33%</div>
+                    <div class="premium normal">2.10%</div>
                     <div class="signal-badge">⚪ 正常</div>
                     <div class="limit-info">限额申购, 50</div>
                 </div>
@@ -210,13 +209,13 @@
             <div class="row">
                 <div class="info">
                     <div class="name-box">
-                        <span class="name">纳指100</span>
-                        <span class="code">161130</span>
+                        <span class="name">华宝油油气</span>
+                        <span class="code">162411</span>
                     </div>
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium normal">1.18%</div>
+                    <div class="premium normal">1.55%</div>
                     <div class="signal-badge">⚪ 正常</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -240,13 +239,13 @@
             <div class="row">
                 <div class="info">
                     <div class="name-box">
-                        <span class="name">华宝油油气</span>
-                        <span class="code">162411</span>
+                        <span class="name">纳指100</span>
+                        <span class="code">161130</span>
                     </div>
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium normal">0.93%</div>
+                    <div class="premium normal">1.13%</div>
                     <div class="signal-badge">⚪ 正常</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -261,7 +260,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium normal">0.67%</div>
+                    <div class="premium normal">0.79%</div>
                     <div class="signal-badge">⚪ 正常</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -306,7 +305,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium normal">0.27%</div>
+                    <div class="premium normal">0.13%</div>
                     <div class="signal-badge">⚪ 正常</div>
                     <div class="limit-info">限额申购, 1,000</div>
                 </div>
@@ -321,37 +320,7 @@
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-0.57%</div>
-                    <div class="signal-badge">⚫ 折价</div>
-                    <div class="limit-info">开放申购, 不限额</div>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="info">
-                    <div class="name-box">
-                        <span class="name">添富核心</span>
-                        <span class="code">501188</span>
-                    </div>
-                    <div class="trade-tag">场内_身份证限购</div>
-                </div>
-                <div class="data-group">
-                    <div class="premium discount">-0.57%</div>
-                    <div class="signal-badge">⚫ 折价</div>
-                    <div class="limit-info">限额申购, 500,000</div>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="info">
-                    <div class="name-box">
-                        <span class="name">财通升级</span>
-                        <span class="code">501015</span>
-                    </div>
-                    <div class="trade-tag">场内_身份证限购</div>
-                </div>
-                <div class="data-group">
-                    <div class="premium discount">-0.58%</div>
+                    <div class="premium discount">-0.51%</div>
                     <div class="signal-badge">⚫ 折价</div>
                     <div class="limit-info">开放申购, 不限额</div>
                 </div>
@@ -366,7 +335,7 @@
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-0.84%</div>
+                    <div class="premium discount">-0.69%</div>
                     <div class="signal-badge">⚫ 折价</div>
                     <div class="limit-info">开放申购, 不限额</div>
                 </div>
@@ -375,28 +344,28 @@
             <div class="row">
                 <div class="info">
                     <div class="name-box">
-                        <span class="name">国联安科</span>
-                        <span class="code">501096</span>
+                        <span class="name">添富核心</span>
+                        <span class="code">501188</span>
                     </div>
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-0.92%</div>
+                    <div class="premium discount">-0.78%</div>
                     <div class="signal-badge">⚫ 折价</div>
-                    <div class="limit-info">开放申购, 不限额</div>
+                    <div class="limit-info">限额申购, 500,000</div>
                 </div>
             </div>
             
             <div class="row">
                 <div class="info">
                     <div class="name-box">
-                        <span class="name">平安新兴</span>
-                        <span class="code">501099</span>
+                        <span class="name">银华鑫盛</span>
+                        <span class="code">501022</span>
                     </div>
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-0.95%</div>
+                    <div class="premium discount">-0.82%</div>
                     <div class="signal-badge">⚫ 折价</div>
                     <div class="limit-info">开放申购, 不限额</div>
                 </div>
@@ -411,7 +380,7 @@
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-1.00%</div>
+                    <div class="premium discount">-0.95%</div>
                     <div class="signal-badge">⚫ 折价</div>
                     <div class="limit-info">开放申购, 不限额</div>
                 </div>
@@ -420,13 +389,58 @@
             <div class="row">
                 <div class="info">
                     <div class="name-box">
-                        <span class="name">银华鑫盛</span>
-                        <span class="code">501022</span>
+                        <span class="name">国联安科</span>
+                        <span class="code">501096</span>
                     </div>
                     <div class="trade-tag">场内_身份证限购</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-1.03%</div>
+                    <div class="premium discount">-1.04%</div>
+                    <div class="signal-badge">⚫ 折价</div>
+                    <div class="limit-info">开放申购, 不限额</div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="info">
+                    <div class="name-box">
+                        <span class="name">平安新兴</span>
+                        <span class="code">501099</span>
+                    </div>
+                    <div class="trade-tag">场内_身份证限购</div>
+                </div>
+                <div class="data-group">
+                    <div class="premium discount">-1.19%</div>
+                    <div class="signal-badge">⚫ 折价</div>
+                    <div class="limit-info">开放申购, 不限额</div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="info">
+                    <div class="name-box">
+                        <span class="name">财通升级</span>
+                        <span class="code">501015</span>
+                    </div>
+                    <div class="trade-tag">场内_身份证限购</div>
+                </div>
+                <div class="data-group">
+                    <div class="premium discount">-1.67%</div>
+                    <div class="signal-badge">⚫ 折价</div>
+                    <div class="limit-info">开放申购, 不限额</div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="info">
+                    <div class="name-box">
+                        <span class="name">创新动力</span>
+                        <span class="code">501076</span>
+                    </div>
+                    <div class="trade-tag">场内_身份证限购</div>
+                </div>
+                <div class="data-group">
+                    <div class="premium discount">-2.36%</div>
                     <div class="signal-badge">⚫ 折价</div>
                     <div class="limit-info">开放申购, 不限额</div>
                 </div>
@@ -441,24 +455,9 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-2.48%</div>
+                    <div class="premium discount">-2.60%</div>
                     <div class="signal-badge">⚫ 折价</div>
                     <div class="limit-info">限额申购, 100,000</div>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="info">
-                    <div class="name-box">
-                        <span class="name">创新动力</span>
-                        <span class="code">501076</span>
-                    </div>
-                    <div class="trade-tag">场内_身份证限购</div>
-                </div>
-                <div class="data-group">
-                    <div class="premium discount">-2.54%</div>
-                    <div class="signal-badge">⚫ 折价</div>
-                    <div class="limit-info">开放申购, 不限额</div>
                 </div>
             </div>
             
@@ -471,7 +470,7 @@
                     <div class="trade-tag">场内_账户限购(可拖拉机)</div>
                 </div>
                 <div class="data-group">
-                    <div class="premium discount">-9.44%</div>
+                    <div class="premium discount">-9.18%</div>
                     <div class="signal-badge">⚫ 折价</div>
                     <div class="limit-info">暂停申购, -</div>
                 </div>
@@ -479,344 +478,21 @@
             
             </div>
 
-            <details class="audit-section">
-                <summary class="summary-box">
-                    <span>📊 标的数据 (实时计算审计)</span>
-                    <span style="font-size:12px;">展开 ▼</span>
-                </summary>
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>标的</th><th>价格</th><th>昨净</th><th>估值</th><th>Ticker</th><th>P1</th><th>P2</th><th>公式</th><th>最终</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            
-        <tr>
-            <td>全球芯片<br><small>501225</small></td>
-            <td>2.319</td>
-            <td>2.1477</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>7.98%</td>
-            <td>7.98%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">7.98%</td>
-        </tr>
-        <tr>
-            <td>石油基金<br><small>160416</small></td>
-            <td>2.574</td>
-            <td>2.2028</td>
-            <td>2.2093</td>
-            <td>0.00%</td>
-            <td>16.85%</td>
-            <td>16.85%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">16.85%</td>
-        </tr>
-        <tr>
-            <td>原油基金<br><small>161129</small></td>
-            <td>2.355</td>
-            <td>1.6368</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>43.88%</td>
-            <td>43.88%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">43.88%</td>
-        </tr>
-        <tr>
-            <td>南方原油<br><small>501018</small></td>
-            <td>2.361</td>
-            <td>1.7170</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>37.51%</td>
-            <td>37.51%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">37.51%</td>
-        </tr>
-        <tr>
-            <td>嘉实原油<br><small>160723</small></td>
-            <td>2.800</td>
-            <td>1.9931</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>40.48%</td>
-            <td>40.48%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">40.48%</td>
-        </tr>
-        <tr>
-            <td>港美互联<br><small>160644</small></td>
-            <td>1.551</td>
-            <td>1.5904</td>
-            <td>1.5955</td>
-            <td>0.00%</td>
-            <td>-2.48%</td>
-            <td>-2.48%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">-2.48%</td>
-        </tr>
-        <tr>
-            <td>标普500<br><small>161125</small></td>
-            <td>2.789</td>
-            <td>2.7567</td>
-            <td>2.7712</td>
-            <td>0.00%</td>
-            <td>1.17%</td>
-            <td>1.17%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">1.17%</td>
-        </tr>
-        <tr>
-            <td>标普科技<br><small>161128</small></td>
-            <td>5.412</td>
-            <td>5.2830</td>
-            <td>5.3117</td>
-            <td>0.00%</td>
-            <td>2.44%</td>
-            <td>2.44%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">2.44%</td>
-        </tr>
-        <tr>
-            <td>黄金主题<br><small>161116</small></td>
-            <td>1.730</td>
-            <td>1.6646</td>
-            <td>1.6654</td>
-            <td>0.00%</td>
-            <td>3.93%</td>
-            <td>3.93%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">3.93%</td>
-        </tr>
-        <tr>
-            <td>标普医疗<br><small>161126</small></td>
-            <td>1.807</td>
-            <td>1.7949</td>
-            <td>1.8055</td>
-            <td>0.00%</td>
-            <td>0.67%</td>
-            <td>0.67%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">0.67%</td>
-        </tr>
-        <tr>
-            <td>白银基金<br><small>161226</small></td>
-            <td>2.679</td>
-            <td>1.9913</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>34.54%</td>
-            <td>34.54%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">34.54%</td>
-        </tr>
-        <tr>
-            <td>纳指100<br><small>161130</small></td>
-            <td>3.747</td>
-            <td>3.7033</td>
-            <td>3.7268</td>
-            <td>0.00%</td>
-            <td>1.18%</td>
-            <td>1.18%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">1.18%</td>
-        </tr>
-        <tr>
-            <td>华宝油油气<br><small>162411</small></td>
-            <td>0.974</td>
-            <td>0.9650</td>
-            <td>0.9706</td>
-            <td>0.00%</td>
-            <td>0.93%</td>
-            <td>0.93%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">0.93%</td>
-        </tr>
-        <tr>
-            <td>全球油气<br><small>163208</small></td>
-            <td>1.362</td>
-            <td>1.5040</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>-9.44%</td>
-            <td>-9.44%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">-9.44%</td>
-        </tr>
-        <tr>
-            <td>石油LOF<br><small>162719</small></td>
-            <td>3.027</td>
-            <td>2.9060</td>
-            <td>2.9221</td>
-            <td>0.00%</td>
-            <td>4.16%</td>
-            <td>4.16%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">4.16%</td>
-        </tr>
-        <tr>
-            <td>标普生物<br><small>161127</small></td>
-            <td>1.680</td>
-            <td>1.6382</td>
-            <td>1.6478</td>
-            <td>0.00%</td>
-            <td>2.55%</td>
-            <td>2.55%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">2.55%</td>
-        </tr>
-        <tr>
-            <td>黄金LOF<br><small>164701</small></td>
-            <td>1.803</td>
-            <td>1.7620</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>2.33%</td>
-            <td>2.33%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">2.33%</td>
-        </tr>
-        <tr>
-            <td>抗通胀<br><small>161815</small></td>
-            <td>1.145</td>
-            <td>1.1380</td>
-            <td>1.1394</td>
-            <td>0.00%</td>
-            <td>0.62%</td>
-            <td>0.62%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">0.62%</td>
-        </tr>
-        <tr>
-            <td>印度基金<br><small>164824</small></td>
-            <td>1.258</td>
-            <td>1.2508</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>0.58%</td>
-            <td>0.58%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">0.58%</td>
-        </tr>
-        <tr>
-            <td>国泰商品<br><small>160216</small></td>
-            <td>0.743</td>
-            <td>0.7410</td>
-            <td>-</td>
-            <td>0.00%</td>
-            <td>0.27%</td>
-            <td>0.27%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">(P1+P2)/2 [平衡]</td>
-            <td style="font-weight:bold;">0.27%</td>
-        </tr>
-        <tr>
-            <td>弘德红利<br><small>501227</small></td>
-            <td>1.085</td>
-            <td>1.0941</td>
-            <td>1.096</td>
-            <td>0.00%</td>
-            <td>-0.83%</td>
-            <td>-1.00%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-1.00%</td>
-        </tr>
-        <tr>
-            <td>平安新兴<br><small>501099</small></td>
-            <td>2.543</td>
-            <td>2.5746</td>
-            <td>2.5673</td>
-            <td>0.00%</td>
-            <td>-1.23%</td>
-            <td>-0.95%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-0.95%</td>
-        </tr>
-        <tr>
-            <td>科创投资<br><small>501082</small></td>
-            <td>2.981</td>
-            <td>2.9990</td>
-            <td>2.9981</td>
-            <td>0.00%</td>
-            <td>-0.60%</td>
-            <td>-0.57%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-0.57%</td>
-        </tr>
-        <tr>
-            <td>添富核心<br><small>501188</small></td>
-            <td>0.920</td>
-            <td>0.9381</td>
-            <td>0.9253</td>
-            <td>0.00%</td>
-            <td>-1.93%</td>
-            <td>-0.57%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-0.57%</td>
-        </tr>
-        <tr>
-            <td>创新动力<br><small>501076</small></td>
-            <td>1.839</td>
-            <td>1.8606</td>
-            <td>1.8869</td>
-            <td>0.00%</td>
-            <td>-1.16%</td>
-            <td>-2.54%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-2.54%</td>
-        </tr>
-        <tr>
-            <td>国联安科<br><small>501096</small></td>
-            <td>1.191</td>
-            <td>1.2166</td>
-            <td>1.202</td>
-            <td>0.00%</td>
-            <td>-2.10%</td>
-            <td>-0.92%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-0.92%</td>
-        </tr>
-        <tr>
-            <td>财通升级<br><small>501015</small></td>
-            <td>2.230</td>
-            <td>2.2570</td>
-            <td>2.243</td>
-            <td>0.00%</td>
-            <td>-1.20%</td>
-            <td>-0.58%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-0.58%</td>
-        </tr>
-        <tr>
-            <td>银华鑫盛<br><small>501022</small></td>
-            <td>2.441</td>
-            <td>2.4790</td>
-            <td>2.4664</td>
-            <td>0.00%</td>
-            <td>-1.53%</td>
-            <td>-1.03%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-1.03%</td>
-        </tr>
-        <tr>
-            <td>财通精选<br><small>501001</small></td>
-            <td>1.424</td>
-            <td>1.4370</td>
-            <td>1.4361</td>
-            <td>0.00%</td>
-            <td>-0.90%</td>
-            <td>-0.84%</td>
-            <td style="font-size:10px; color:#666; max-width:80px;">Price/GSZ [同步]</td>
-            <td style="font-weight:bold;">-0.84%</td>
-        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </details>
-        </div>
-    </body>
+            <div class="audit-box">
+                <details>
+                    <summary class="audit-btn">📊 查看标的数据 (计算审计)</summary>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr><th>标的</th><th>价</th><th>昨净</th><th>估值</th><th>Ticker</th><th>P1</th><th>P2</th><th>公式</th><th>最终</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>全球芯片<br><small>501225</small></td><td>2.320</td><td>2.1477</td><td>-</td><td>0.00%</td><td>8.02%</td><td>8.02%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>8.02%</td></tr><tr><td>石油基金<br><small>160416</small></td><td>2.594</td><td>2.2028</td><td>2.2093</td><td>0.00%</td><td>17.76%</td><td>17.76%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>17.76%</td></tr><tr><td>原油基金<br><small>161129</small></td><td>2.384</td><td>1.6368</td><td>-</td><td>0.00%</td><td>45.65%</td><td>45.65%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>45.65%</td></tr><tr><td>南方原油<br><small>501018</small></td><td>2.410</td><td>1.7170</td><td>-</td><td>0.00%</td><td>40.36%</td><td>40.36%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>40.36%</td></tr><tr><td>嘉实原油<br><small>160723</small></td><td>2.837</td><td>1.9931</td><td>-</td><td>0.00%</td><td>42.34%</td><td>42.34%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>42.34%</td></tr><tr><td>港美互联<br><small>160644</small></td><td>1.549</td><td>1.5904</td><td>1.5955</td><td>0.00%</td><td>-2.60%</td><td>-2.60%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>-2.60%</td></tr><tr><td>标普500<br><small>161125</small></td><td>2.789</td><td>2.7567</td><td>2.7712</td><td>0.00%</td><td>1.17%</td><td>1.17%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>1.17%</td></tr><tr><td>标普科技<br><small>161128</small></td><td>5.403</td><td>5.2830</td><td>5.3117</td><td>0.00%</td><td>2.27%</td><td>2.27%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>2.27%</td></tr><tr><td>黄金主题<br><small>161116</small></td><td>1.728</td><td>1.6646</td><td>1.6654</td><td>0.00%</td><td>3.81%</td><td>3.81%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>3.81%</td></tr><tr><td>标普医疗<br><small>161126</small></td><td>1.809</td><td>1.7949</td><td>1.8055</td><td>0.00%</td><td>0.79%</td><td>0.79%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>0.79%</td></tr><tr><td>白银基金<br><small>161226</small></td><td>2.654</td><td>1.9913</td><td>-</td><td>0.00%</td><td>33.28%</td><td>33.28%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>33.28%</td></tr><tr><td>纳指100<br><small>161130</small></td><td>3.745</td><td>3.7033</td><td>3.7268</td><td>0.00%</td><td>1.13%</td><td>1.13%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>1.13%</td></tr><tr><td>华宝油油气<br><small>162411</small></td><td>0.980</td><td>0.9650</td><td>0.9706</td><td>0.00%</td><td>1.55%</td><td>1.55%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>1.55%</td></tr><tr><td>全球油气<br><small>163208</small></td><td>1.366</td><td>1.5040</td><td>-</td><td>0.00%</td><td>-9.18%</td><td>-9.18%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>-9.18%</td></tr><tr><td>石油LOF<br><small>162719</small></td><td>3.049</td><td>2.9060</td><td>2.9221</td><td>0.00%</td><td>4.92%</td><td>4.92%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>4.92%</td></tr><tr><td>标普生物<br><small>161127</small></td><td>1.680</td><td>1.6382</td><td>1.6478</td><td>0.00%</td><td>2.55%</td><td>2.55%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>2.55%</td></tr><tr><td>黄金LOF<br><small>164701</small></td><td>1.799</td><td>1.7620</td><td>-</td><td>0.00%</td><td>2.10%</td><td>2.10%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>2.10%</td></tr><tr><td>抗通胀<br><small>161815</small></td><td>1.145</td><td>1.1380</td><td>1.1394</td><td>0.00%</td><td>0.62%</td><td>0.62%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>0.62%</td></tr><tr><td>印度基金<br><small>164824</small></td><td>1.258</td><td>1.2508</td><td>-</td><td>0.00%</td><td>0.58%</td><td>0.58%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>0.58%</td></tr><tr><td>国泰商品<br><small>160216</small></td><td>0.742</td><td>0.7410</td><td>-</td><td>0.00%</td><td>0.13%</td><td>0.13%</td><td style='font-size:9px;color:#888'>(P1+P2)/2 [平衡]</td><td style='font-weight:bold'>0.13%</td></tr><tr><td>弘德红利<br><small>501227</small></td><td>1.084</td><td>1.0941</td><td>1.0944</td><td>0.00%</td><td>-0.92%</td><td>-0.95%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-0.95%</td></tr><tr><td>平安新兴<br><small>501099</small></td><td>2.543</td><td>2.5746</td><td>2.5735</td><td>0.00%</td><td>-1.23%</td><td>-1.19%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-1.19%</td></tr><tr><td>科创投资<br><small>501082</small></td><td>2.981</td><td>2.9990</td><td>2.9962</td><td>0.00%</td><td>-0.60%</td><td>-0.51%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-0.51%</td></tr><tr><td>添富核心<br><small>501188</small></td><td>0.918</td><td>0.9381</td><td>0.9252</td><td>0.00%</td><td>-2.14%</td><td>-0.78%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-0.78%</td></tr><tr><td>创新动力<br><small>501076</small></td><td>1.839</td><td>1.8606</td><td>1.8834</td><td>0.00%</td><td>-1.16%</td><td>-2.36%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-2.36%</td></tr><tr><td>国联安科<br><small>501096</small></td><td>1.191</td><td>1.2166</td><td>1.2035</td><td>0.00%</td><td>-2.10%</td><td>-1.04%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-1.04%</td></tr><tr><td>财通升级<br><small>501015</small></td><td>2.201</td><td>2.2570</td><td>2.2384</td><td>0.00%</td><td>-2.48%</td><td>-1.67%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-1.67%</td></tr><tr><td>银华鑫盛<br><small>501022</small></td><td>2.441</td><td>2.4790</td><td>2.4611</td><td>0.00%</td><td>-1.53%</td><td>-0.82%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-0.82%</td></tr><tr><td>财通精选<br><small>501001</small></td><td>1.421</td><td>1.4370</td><td>1.4309</td><td>0.00%</td><td>-1.11%</td><td>-0.69%</td><td style='font-size:9px;color:#888'>Price/GSZ [同步]</td><td style='font-weight:bold'>-0.69%</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+        </div> </body>
     </html>
     
