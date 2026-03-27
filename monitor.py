@@ -223,6 +223,61 @@ def get_price(code):
     except: return None
 
 # ==============================================================================
+# ====== 6.5. 数据有效性校验与降级模块 (新增) ======
+# 说明：本模块完全独立封装，负责感知交易时区与拦截极端错误。
+#       内部带有内存缓存，可防止验证时重复请求。直接删除本模块不影响原有程序。
+# ==============================================================================
+TICKER_CACHE = {}
+_original_get_market_change = get_market_change
+
+def get_market_change_cached(ticker):
+    if ticker in TICKER_CACHE: return TICKER_CACHE[ticker]
+    val = _original_get_market_change(ticker)
+    TICKER_CACHE[ticker] = val
+    return val
+
+# 拦截重写，为原有功能加上缓存层
+get_market_change = get_market_change_cached
+
+def validate_ticker_market_data(ticker, asset_change):
+    if asset_change is None: return False
+    
+    # 【次优先级】全局极宽阈值保护 (±50%)：仅过滤 Yahoo 接口明显抽风的错误数据
+    if abs(asset_change) > 0.50:
+        return False
+        
+    # 【最高优先级】交易时段感知 + 涨跌幅归零判定
+    if abs(asset_change) < 0.0001:
+        # 获取美东时间 (pytz 会自动处理夏令时/冬令时的偏移)
+        est_tz = pytz.timezone('US/Eastern')
+        now_est = datetime.now(est_tz)
+        is_weekend = now_est.weekday() >= 5
+        time_val = now_est.hour + now_est.minute / 60.0
+        
+        is_open = False
+        
+        # 1. 印度基金 (参考印度股市时段，约美东 23:00 至 次日 07:30)
+        if ticker == "EPI":
+            if not is_weekend and (time_val >= 23.0 or time_val <= 7.5):
+                is_open = True
+                
+        # 2. 大宗商品期货 (CL=F/GC=F/SLV/DBC/GSG 等近乎 24h，除周末外均视作交易中)
+        elif ticker in ["CL=F", "GC=F", "SLV", "DBC", "GSG"]:
+            if not is_weekend:
+                is_open = True
+                
+        # 3. 美股及其他 ETF (美东常规交易时间 09:30 - 16:00)
+        else:
+            if not is_weekend and (9.5 <= time_val <= 16.0):
+                is_open = True
+                
+        # 核心逻辑：如果当前市场处于交易时段内，但抓回来的涨跌幅竟然是 0，说明数据失效！
+        if is_open:
+            return False
+            
+    return True
+
+# ==============================================================================
 # ====== 7. 运行频率控制 ======
 # ==============================================================================
 def should_run():
@@ -427,7 +482,7 @@ def generate_html(results, report_time):
 </html>"""
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("--- 报告生成成功: index.html (已追加标的数据核对模块) ---")
+    print("--- 报告生成成功: index.html (已追加标的数据核有效模块) ---")
 
 # ==============================================================================
 # ====== 9. 主程序入口 ======
@@ -454,6 +509,17 @@ def run():
             p1 = 0
             p2 = 0
             
+            # ====== ⬇️ 新增：Ticker 数据有效性降级拦截 ⬇️ ======
+            # 若此处抛错或被删除，异常会被 pass，程序将完全走原有逻辑，无任何报错
+            try:
+                if ticker:
+                    _check_val = get_market_change(ticker)
+                    if not validate_ticker_market_data(ticker, _check_val):
+                        ticker = "" # 主动抹除 ticker，强制后续逻辑退回到无 ticker 的 B 分支
+            except NameError:
+                pass
+            # ====== ⬆️ 新增：Ticker 数据有效性降级拦截 ⬆️ ======
+
             # --- 分支 A: 有 Ticker (走全球定价模型) ---
             if ticker:
                 asset_change = get_market_change(ticker)
