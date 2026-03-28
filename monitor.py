@@ -246,8 +246,8 @@ def validate_ticker_market_data(ticker, asset_change):
     if abs(asset_change) > 0.50:
         return False
         
-    # 【最高优先级】交易时段感知 + 涨跌幅归零判定
-    if abs(asset_change) < 0.0001:
+    # 【最高优先级】交易时段感知 + 涨跌幅归零判定 (修正：放宽至 0.0005，防止误杀正常窄幅波动)
+    if abs(asset_change) < 0.0005:
         # 获取美东时间 (pytz 会自动处理夏令时/冬令时的偏移)
         est_tz = pytz.timezone('US/Eastern')
         now_est = datetime.now(est_tz)
@@ -271,7 +271,7 @@ def validate_ticker_market_data(ticker, asset_change):
             if not is_weekend and (9.5 <= time_val <= 16.0):
                 is_open = True
                 
-        # 核心逻辑：如果当前市场处于交易时段内，但抓回来的涨跌幅竟然是 0，说明数据失效！
+        # 核心逻辑：如果当前市场处于交易时段内，但抓回来的涨跌幅竟然是 0 (或极小)，说明数据失效！
         if is_open:
             return False
             
@@ -523,8 +523,9 @@ def run():
             # --- 分支 A: 有 Ticker (走全球定价模型) ---
             if ticker:
                 asset_change = get_market_change(ticker)
-                # 黄金(GC=F)不计算汇率波动，其他自动叠加 CNH 波动
-                fx = (1 + fx_change) if ticker != "GC=F" else 1
+                
+                # 修正：统一计算汇率波动，包括黄金(GC=F)
+                fx = 1 + fx_change
                 
                 # 实时预估净值 = 昨收净值 * (1 + 标的涨跌 * 权重) * 汇率
                 est_nav = dwjz * (1 + asset_change * info["w"]) * fx
