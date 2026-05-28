@@ -46,6 +46,7 @@ FUND_CONFIG = {
     "161130": {"name": "纳指100", "ticker": "QQQ", "w": 0.95},
     "162411": {"name": "华宝油油气", "ticker": "XOP", "w": 0.90},
     "163208": {"name": "全球油气", "ticker": "XOP", "w": 0.90},
+    "501312": {"name": "海外科技", "ticker": "QQQ", "w": 0.96},
 # ------ 补全截图缺失标的 (Missing from Screenshots) ------
     "162719": {"name": "石油LOF", "ticker": "IXC", "w": 0.85},
     "161127": {"name": "标普生物", "ticker": "XBI", "w": 0.95},
